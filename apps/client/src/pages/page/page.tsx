@@ -123,7 +123,11 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
           <title>{`${page?.icon || ""}  ${page?.title || t("untitled")}`}</title>
         </Helmet>
 
-        <MemoizedPageHeader readOnly={!canEdit} />
+        <MemoizedPageHeader
+          readOnly={!canEdit}
+          pageId={page.id}
+          coverPhoto={page.coverPhoto}
+        />
 
         <MemoizedFullEditor
           key={page.id}
@@ -133,6 +137,7 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
           slugId={page.slugId}
           spaceSlug={page?.space?.slug}
           editable={canEdit}
+          coverPhoto={page.coverPhoto}
         />
         <MemoizedHistoryModal pageId={page.id} />
       </div>

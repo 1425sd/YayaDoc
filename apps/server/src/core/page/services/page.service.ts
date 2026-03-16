@@ -140,6 +140,7 @@ export class PageService {
         parentPageId,
       ),
       icon: createPageDto.icon,
+      coverPhoto: createPageDto.coverPhoto,
       parentPageId: parentPageId,
       spaceId: createPageDto.spaceId,
       creatorId: userId,
@@ -218,6 +219,7 @@ export class PageService {
       {
         title: updatePageDto.title,
         icon: updatePageDto.icon,
+        coverPhoto: updatePageDto.coverPhoto,
         lastUpdatedById: user.id,
         updatedAt: new Date(),
         contributorIds: contributorIds,
@@ -614,6 +616,7 @@ export class PageService {
           slugId: pageFromMap.newSlugId,
           title: title,
           icon: page.icon,
+          coverPhoto: page.coverPhoto,
           content: prosemirrorJson,
           textContent: jsonToText(prosemirrorJson),
           ydoc: createYdocFromJson(prosemirrorJson),

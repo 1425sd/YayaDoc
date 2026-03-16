@@ -9,8 +9,10 @@ import { useEditorState } from "@tiptap/react";
 
 interface Props {
   readOnly?: boolean;
+  pageId: string;
+  coverPhoto?: string | null;
 }
-export default function PageHeader({ readOnly }: Props) {
+export default function PageHeader({ readOnly, pageId, coverPhoto }: Props) {
   const pageEditor = useAtomValue(pageEditorAtom);
   const isEditorEditable = useEditorState({
     editor: pageEditor,
@@ -42,7 +44,11 @@ export default function PageHeader({ readOnly }: Props) {
 
       {pageEditor && !readOnly && isEditorEditable && (
         <div className={classes.toolbarRow}>
-          <TopToolbar editor={pageEditor} />
+          <TopToolbar
+            editor={pageEditor}
+            pageId={pageId}
+            coverPhoto={coverPhoto}
+          />
         </div>
       )}
     </div>

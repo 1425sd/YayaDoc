@@ -6,6 +6,7 @@ import { Container } from "@mantine/core";
 import { useAtom } from "jotai";
 import { userAtom } from "@/features/user/atoms/current-user-atom.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
+import { getPageBackgroundSurfaceStyle } from "@/features/page/page-background.ts";
 
 const MemoizedTitleEditor = React.memo(TitleEditor);
 const MemoizedPageEditor = React.memo(PageEditor);
@@ -17,6 +18,7 @@ export interface FullEditorProps {
   content: string;
   spaceSlug: string;
   editable: boolean;
+  coverPhoto?: string | null;
 }
 
 export function FullEditor({
@@ -26,6 +28,7 @@ export function FullEditor({
   content,
   spaceSlug,
   editable,
+  coverPhoto,
 }: FullEditorProps) {
   const [user] = useAtom(userAtom);
   const fullPageWidth = user.settings?.preferences?.fullPageWidth;
@@ -33,15 +36,17 @@ export function FullEditor({
     editable &&
     (user.settings?.preferences?.pageEditMode ?? PageEditMode.Edit) ===
       PageEditMode.Edit;
+  const backgroundStyle = getPageBackgroundSurfaceStyle(coverPhoto);
 
   return (
     <Container
       fluid={fullPageWidth}
       size={!fullPageWidth && 900}
-      className={classes.editor}
+      className={`${classes.editor} ${classes.pageSurface}`}
       style={
         {
           "--editor-top-offset": showToolbar ? "140px" : "48px",
+          ...backgroundStyle,
         } as React.CSSProperties
       }
     >

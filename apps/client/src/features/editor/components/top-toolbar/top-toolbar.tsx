@@ -27,10 +27,22 @@ import {
 import { useEditorState } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
 import clsx from "clsx";
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
+import { useUpdatePageMutation } from "@/features/page/queries/page-query.ts";
+import {
+  PAGE_BACKGROUND_OPTIONS,
+  type PageBackgroundId,
+  getPageBackgroundId,
+  getPageBackgroundOption,
+  toPageBackgroundCoverPhoto,
+} from "@/features/page/page-background.ts";
 import classes from "./top-toolbar.module.css";
 
-type TopToolbarProps = { editor: Editor };
+type TopToolbarProps = {
+  editor: Editor;
+  pageId: string;
+  coverPhoto?: string | null;
+};
 
 const FONT_SIZE_OPTIONS = [
   { label: "默认", value: null },
@@ -53,9 +65,18 @@ function getFontSizeLabel(fontSize: string | null | undefined) {
   return matchedPixelSize?.[1] || fontSize;
 }
 
-export function TopToolbar({ editor }: TopToolbarProps) {
+export function TopToolbar({
+  editor,
+  pageId,
+  coverPhoto,
+}: TopToolbarProps) {
   const [isBlockTypeOpen, setIsBlockTypeOpen] = useState(false);
   const [isFontSizeOpen, setIsFontSizeOpen] = useState(false);
+  const [isBackgroundOpen, setIsBackgroundOpen] = useState(false);
+  const [backgroundId, setBackgroundId] = useState<PageBackgroundId>(() =>
+    getPageBackgroundId(coverPhoto),
+  );
+  const updatePageMutation = useUpdatePageMutation();
   const state = useEditorState({
     editor,
     selector: (ctx) => ({
@@ -78,6 +99,11 @@ export function TopToolbar({ editor }: TopToolbarProps) {
       fontSize: ctx.editor.getAttributes("textStyle").fontSize,
     }),
   });
+  const persistedBackgroundId = getPageBackgroundId(coverPhoto);
+
+  useEffect(() => {
+    setBackgroundId(persistedBackgroundId);
+  }, [persistedBackgroundId]);
 
   const Btn = ({ label, active, onClick, children }: { label: string; active?: boolean; onClick: () => void; children: ReactNode }) => (
     <Tooltip label={label} withArrow>
@@ -114,6 +140,9 @@ export function TopToolbar({ editor }: TopToolbarProps) {
             ? "引用"
             : "正文";
   const currentFontSizeLabel = getFontSizeLabel(state.fontSize);
+  const currentBackgroundOption = getPageBackgroundOption(
+    toPageBackgroundCoverPhoto(backgroundId),
+  );
   const blockOptions = [
     {
       label: "正文",
@@ -146,6 +175,25 @@ export function TopToolbar({ editor }: TopToolbarProps) {
       command: () => editor.chain().focus().toggleBlockquote().run(),
     },
   ];
+  const handleBackgroundChange = async (nextBackgroundId: PageBackgroundId) => {
+    if (nextBackgroundId === backgroundId) {
+      setIsBackgroundOpen(false);
+      return;
+    }
+
+    const previousBackgroundId = backgroundId;
+    setBackgroundId(nextBackgroundId);
+    setIsBackgroundOpen(false);
+
+    try {
+      await updatePageMutation.mutateAsync({
+        pageId,
+        coverPhoto: toPageBackgroundCoverPhoto(nextBackgroundId),
+      });
+    } catch {
+      setBackgroundId(previousBackgroundId);
+    }
+  };
 
   return (
     <div className={classes.wrap}>
@@ -235,6 +283,54 @@ export function TopToolbar({ editor }: TopToolbarProps) {
                     </Button>
                   );
                 })}
+              </Button.Group>
+            </ScrollArea.Autosize>
+          </Popover.Dropdown>
+        </Popover>
+
+        <Popover
+          opened={isBackgroundOpen}
+          withArrow
+          position="bottom-start"
+          onChange={setIsBackgroundOpen}
+        >
+          <Popover.Target>
+            <UnstyledButton
+              className={classes.selectBtn}
+              onClick={() => setIsBackgroundOpen(!isBackgroundOpen)}
+            >
+              <span>{`背景 · ${currentBackgroundOption.label}`}</span>
+              <IconChevronDown size={14} />
+            </UnstyledButton>
+          </Popover.Target>
+
+          <Popover.Dropdown p={4}>
+            <ScrollArea.Autosize mah={220} type="scroll">
+              <Button.Group orientation="vertical">
+                {PAGE_BACKGROUND_OPTIONS.map((option) => (
+                  <Button
+                    key={option.id}
+                    variant="subtle"
+                    justify="space-between"
+                    fullWidth
+                    loading={
+                      updatePageMutation.isPending && option.id === backgroundId
+                    }
+                    onClick={() => handleBackgroundChange(option.id)}
+                    rightSection={
+                      option.id === backgroundId ? <IconCheck size={16} /> : null
+                    }
+                    style={{ border: "none" }}
+                  >
+                    <span className={classes.backgroundOptionLabel}>
+                      <span
+                        className={classes.backgroundSwatch}
+                        style={option.previewStyle}
+                      />
+                      <span>{option.label}</span>
+                    </span>
+                  </Button>
+                ))}
               </Button.Group>
             </ScrollArea.Autosize>
           </Popover.Dropdown>

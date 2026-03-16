@@ -9,17 +9,21 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { useAtom } from "jotai";
 import { readOnlyEditorAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
+import classes from "@/features/editor/styles/editor.module.css";
+import { getPageBackgroundSurfaceStyle } from "@/features/page/page-background.ts";
 
 interface PageEditorProps {
   title: string;
   content: any;
   pageId?: string;
+  coverPhoto?: string | null;
 }
 
 export default function ReadonlyPageEditor({
   title,
   content,
   pageId,
+  coverPhoto,
 }: PageEditorProps) {
   const [, setReadOnlyEditor] = useAtom(readOnlyEditorAtom);
   const isComponentMounted = useRef(false);
@@ -65,7 +69,10 @@ export default function ReadonlyPageEditor({
   ];
 
   return (
-    <>
+    <div
+      className={classes.pageSurface}
+      style={getPageBackgroundSurfaceStyle(coverPhoto)}
+    >
       <div className="page-title">
         <EditorProvider
           editable={false}
@@ -95,6 +102,6 @@ export default function ReadonlyPageEditor({
         }}
       ></EditorProvider>
       <div style={{ paddingBottom: "20vh" }}></div>
-    </>
+    </div>
   );
 }
