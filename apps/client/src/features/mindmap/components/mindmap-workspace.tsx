@@ -1,25 +1,15 @@
-import {
-  ActionIcon,
-  Button,
-  Group,
-  Loader,
-  Paper,
-  Select,
-  Text,
-  TextInput,
-  Tooltip,
-} from "@mantine/core";
 import { useDebouncedCallback } from "@mantine/hooks";
-import {
-  IconArrowBackUp,
-  IconArrowForwardUp,
-  IconCheck,
-  IconMap2,
-} from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { getSpaceUrl } from "@/lib/config.ts";
+import {
+  buildMindMapImagePayloadFromBlob,
+  DEFAULT_NODE_IMAGE_HEIGHT,
+  DEFAULT_NODE_IMAGE_WIDTH,
+  getAutoDetectedNodeHyperlink,
+  getClipboardImageFile,
+  normalizeHyperlink,
+} from "@/features/mindmap/lib/mindmap-node-assets.ts";
 import {
   updatePageData,
   useUpdatePageMutation,
@@ -27,15 +17,47 @@ import {
 } from "@/features/page/queries/page-query.ts";
 import { IPage } from "@/features/page/types/page.types.ts";
 import {
+  countMindMapDocumentStats,
   createMindMapContentFromData,
   getMindMapData,
   MINDMAP_CONTENT_FORMAT,
   MINDMAP_LAYOUT_OPTIONS,
 } from "@/features/mindmap/lib/mindmap-content.ts";
+import {
+  applyCanvasSettingsToThemeConfig,
+  buildMindMapThemeConfigFromPreset,
+  getMindMapCanvasSettings,
+  getMindMapThemePresetId,
+  getMindMapThemePresets,
+  normalizeMindMapThemeConfig,
+} from "@/features/mindmap/lib/mindmap-theme.ts";
+import type {
+  MindMapCanvasSettings,
+  MindMapDocumentStats,
+  MindMapEditableNodeStyle,
+  MindMapFontWeight,
+  MindMapHyperlinkPayload,
+  MindMapInspectorNode,
+  MindMapLayoutValue,
+  MindMapMetadataDialogKind,
+  MindMapNodeData,
+  MindMapNodeImagePayload,
+  MindMapThemeConfig,
+  SimpleMindMapApi,
+  SimpleMindMapNode,
+} from "@/features/mindmap/types/mindmap.types.ts";
+import { MindmapBottomBar } from "./mindmap-bottom-bar.tsx";
+import { MindmapCanvas } from "./mindmap-canvas.tsx";
+import { MindmapNodeMetadataDialog } from "./mindmap-node-metadata-dialog.tsx";
+import { MindmapRightPanel } from "./mindmap-right-panel.tsx";
+import { MindmapTopToolbar } from "./mindmap-top-toolbar.tsx";
 import classes from "./mindmap-workspace.module.css";
 
-type MindMapConstructor = typeof import("simple-mind-map").default;
-type MindMapInstance = InstanceType<MindMapConstructor>;
+type MindMapStatic = {
+  new (options: Record<string, unknown>): SimpleMindMapApi;
+  hasPlugin(plugin: unknown): number;
+  usePlugin(plugin: unknown): void;
+};
 
 type MindMapWorkspaceProps = {
   page: IPage;
@@ -44,16 +66,27 @@ type MindMapWorkspaceProps = {
 
 type SaveState = "saved" | "saving" | "dirty";
 
-let isMindMapPluginsRegistered = false;
 const MINDMAP_CONTAINER_WAIT_TIMEOUT = 4000;
+const TEXT_EDIT_CLASS_NAMES = [
+  "smm-node-edit-wrap",
+  "smm-richtext-node-edit-wrap",
+] as const;
+const THEME_PRESETS = getMindMapThemePresets();
+
+let isMindMapPluginsRegistered = false;
+
 const COMMANDS_REQUIRING_ACTIVE_NODE = new Set([
   "INSERT_CHILD_NODE",
-  "INSERT_AFTER",
-  "INSERT_PARENT_NODE",
+  "INSERT_NODE",
   "REMOVE_NODE",
+  "ADD_GENERALIZATION",
 ]);
 
-function registerMindMapPlugin(MindMap: any, plugin: any) {
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function registerMindMapPlugin(MindMap: MindMapStatic, plugin: unknown) {
   if (MindMap.hasPlugin(plugin) === -1) {
     MindMap["usePlugin"](plugin);
   }
@@ -67,6 +100,83 @@ function createAbortError() {
 
 function isAbortError(error: unknown) {
   return error instanceof Error && error.name === "AbortError";
+}
+
+function isSimpleMindMapNode(value: unknown): value is SimpleMindMapNode {
+  return (
+    isRecord(value) &&
+    typeof value.getData === "function" &&
+    typeof value.getStyle === "function"
+  );
+}
+
+function isValidHyperlink(value: string) {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function getSafeHyperlink(value: string) {
+  const normalized = normalizeHyperlink(value);
+  return isValidHyperlink(normalized) ? normalized : "";
+}
+
+function hasModifierKey(event: unknown) {
+  return Boolean(
+    isRecord(event) &&
+      (("ctrlKey" in event && Boolean(event.ctrlKey)) ||
+        ("metaKey" in event && Boolean(event.metaKey))),
+  );
+}
+
+function getEventTargetElement(event: unknown) {
+  if (!isRecord(event) || !("target" in event)) {
+    return null;
+  }
+
+  const { target } = event;
+  return target instanceof Element ? target : null;
+}
+
+function stopDomEvent(event: unknown) {
+  if (!isRecord(event)) {
+    return;
+  }
+
+  if ("preventDefault" in event && typeof event.preventDefault === "function") {
+    event.preventDefault();
+  }
+
+  if (
+    "stopPropagation" in event &&
+    typeof event.stopPropagation === "function"
+  ) {
+    event.stopPropagation();
+  }
+}
+
+function isHyperlinkIconTarget(event: unknown) {
+  const target = getEventTargetElement(event);
+  return Boolean(target?.closest("a"));
+}
+
+function isMindMapTextEditTarget(target: EventTarget | null) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return TEXT_EDIT_CLASS_NAMES.some(
+    (className) =>
+      target.classList.contains(className) ||
+      Boolean(target.closest(`.${className}`)),
+  );
 }
 
 function getContainerSize(container: HTMLDivElement) {
@@ -170,15 +280,17 @@ async function loadMindMapConstructor() {
     import("simple-mind-map/src/plugins/TouchEvent.js"),
   ]);
 
+  const constructor = MindMap as unknown as MindMapStatic;
+
   if (!isMindMapPluginsRegistered) {
-    registerMindMapPlugin(MindMap, DragPlugin);
-    registerMindMapPlugin(MindMap, SelectPlugin);
-    registerMindMapPlugin(MindMap, KeyboardNavigationPlugin);
-    registerMindMapPlugin(MindMap, TouchEventPlugin);
+    registerMindMapPlugin(constructor, DragPlugin);
+    registerMindMapPlugin(constructor, SelectPlugin);
+    registerMindMapPlugin(constructor, KeyboardNavigationPlugin);
+    registerMindMapPlugin(constructor, TouchEventPlugin);
     isMindMapPluginsRegistered = true;
   }
 
-  return MindMap as MindMapConstructor;
+  return constructor;
 }
 
 function getSaveStatusLabel(saveState: SaveState, lastSavedAt: Date | null) {
@@ -200,7 +312,7 @@ function getSaveStatusLabel(saveState: SaveState, lastSavedAt: Date | null) {
   })}`;
 }
 
-function createFingerprint(data: any) {
+function createFingerprint(data: unknown) {
   try {
     return JSON.stringify(data);
   } catch (error) {
@@ -209,39 +321,304 @@ function createFingerprint(data: any) {
   }
 }
 
+function normalizeFontWeight(value: unknown): MindMapFontWeight {
+  if (typeof value === "number") {
+    return value >= 600 ? "bold" : "normal";
+  }
+
+  if (typeof value === "string") {
+    const normalizedValue = value.toLowerCase();
+    if (normalizedValue === "bold") {
+      return "bold";
+    }
+
+    const parsed = Number(normalizedValue);
+    if (Number.isFinite(parsed)) {
+      return parsed >= 600 ? "bold" : "normal";
+    }
+  }
+
+  return "normal";
+}
+
+function toNumberValue(value: unknown, fallback: number) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return fallback;
+}
+
+function toTextValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function normalizeTags(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((item) => {
+      if (typeof item === "string") {
+        return item;
+      }
+
+      if (isRecord(item) && typeof item.text === "string") {
+        return item.text;
+      }
+
+      return "";
+    })
+    .filter(Boolean);
+}
+
+function getGeneralizationList(value: unknown) {
+  const list = Array.isArray(value) ? value : value ? [value] : [];
+
+  return list.filter(
+    (item): item is Record<string, unknown> =>
+      isRecord(item) && typeof item.text === "string",
+  );
+}
+
+function getNodeKind(node: SimpleMindMapNode): MindMapInspectorNode["kind"] {
+  if (node.isGeneralization) {
+    return "summary";
+  }
+
+  if (node.isRoot) {
+    return "root";
+  }
+
+  if (node.layerIndex === 1) {
+    return "second";
+  }
+
+  return "branch";
+}
+
+function createInspectorNodeSnapshot(
+  node: SimpleMindMapNode,
+): MindMapInspectorNode {
+  const data = node.getData() as MindMapNodeData;
+  const generalizationList = getGeneralizationList(data.generalization);
+  const imageSizeSource = node.getData("imageSize");
+  const imageSize =
+    isRecord(imageSizeSource) &&
+    typeof imageSizeSource.width === "number" &&
+    typeof imageSizeSource.height === "number"
+      ? {
+          width: imageSizeSource.width,
+          height: imageSizeSource.height,
+          custom:
+            typeof imageSizeSource.custom === "boolean"
+              ? imageSizeSource.custom
+              : undefined,
+        }
+      : {
+          width: DEFAULT_NODE_IMAGE_WIDTH,
+          height: DEFAULT_NODE_IMAGE_HEIGHT,
+        };
+
+  const customStyle: Partial<MindMapEditableNodeStyle> = {};
+  const fillColor = node.getSelfStyle("fillColor");
+  const color = node.getSelfStyle("color");
+  const borderColor = node.getSelfStyle("borderColor");
+  const borderWidth = node.getSelfStyle("borderWidth");
+  const borderRadius = node.getSelfStyle("borderRadius");
+  const fontSize = node.getSelfStyle("fontSize");
+  const fontWeight = node.getSelfStyle("fontWeight");
+
+  if (typeof fillColor === "string") {
+    customStyle.fillColor = fillColor;
+  }
+  if (typeof color === "string") {
+    customStyle.color = color;
+  }
+  if (typeof borderColor === "string") {
+    customStyle.borderColor = borderColor;
+  }
+  if (borderWidth !== undefined) {
+    customStyle.borderWidth = toNumberValue(borderWidth, 0);
+  }
+  if (borderRadius !== undefined) {
+    customStyle.borderRadius = toNumberValue(borderRadius, 0);
+  }
+  if (fontSize !== undefined) {
+    customStyle.fontSize = toNumberValue(fontSize, 14);
+  }
+  if (fontWeight !== undefined) {
+    customStyle.fontWeight = normalizeFontWeight(fontWeight);
+  }
+
+  return {
+    uid: toTextValue(data.uid),
+    text: toTextValue(data.text),
+    isRoot: node.isRoot,
+    isGeneralization: node.isGeneralization,
+    layerIndex: node.layerIndex,
+    kind: getNodeKind(node),
+    style: {
+      fillColor: toTextValue(node.getStyle("fillColor")),
+      color: toTextValue(node.getStyle("color")),
+      borderColor: toTextValue(node.getStyle("borderColor")),
+      borderWidth: toNumberValue(node.getStyle("borderWidth"), 0),
+      borderRadius: toNumberValue(node.getStyle("borderRadius"), 0),
+      fontSize: toNumberValue(node.getStyle("fontSize"), 14),
+      fontWeight: normalizeFontWeight(node.getStyle("fontWeight")),
+    },
+    customStyle,
+    metadata: {
+      image: toTextValue(node.getData("image")),
+      imageTitle: toTextValue(node.getData("imageTitle")),
+      imageSize,
+      hyperlink: toTextValue(node.getData("hyperlink")),
+      hyperlinkTitle: toTextValue(node.getData("hyperlinkTitle")),
+      note: toTextValue(node.getData("note")),
+      tags: normalizeTags(node.getData("tag")),
+      hasGeneralization: generalizationList.length > 0,
+      summaryText: node.isGeneralization
+        ? toTextValue(data.text)
+        : toTextValue(generalizationList[0]?.text),
+      summaryCount: generalizationList.length,
+    },
+  };
+}
+
+function getZoomPercent(mindMap: SimpleMindMapApi | null) {
+  if (!mindMap) {
+    return 100;
+  }
+
+  return Math.max(
+    10,
+    Math.round(mindMap.view.getTransformData().state.scale * 100),
+  );
+}
+
 export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
   const { t } = useTranslation();
+  const initialMindMapData = getMindMapData(page.content);
   const containerRef = useRef<HTMLDivElement | null>(null);
-  const mindMapRef = useRef<MindMapInstance | null>(null);
+  const mindMapRef = useRef<SimpleMindMapApi | null>(null);
   const pageRef = useRef(page);
   const isSavingRef = useRef(false);
   const isDirtyRef = useRef(false);
   const isHydratingRef = useRef(true);
   const lastSavedFingerprintRef = useRef("");
+  const markDirtyRef = useRef<() => void>(() => undefined);
   const [title, setTitle] = useState(page.title || "");
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(
     page.updatedAt ? new Date(page.updatedAt) : null,
   );
-  const [layout, setLayout] = useState(getMindMapData(page.content).layout);
+  const [layout, setLayout] = useState<MindMapLayoutValue>(
+    initialMindMapData.layout,
+  );
   const [activeNodeCount, setActiveNodeCount] = useState(0);
+  const [selectedNode, setSelectedNode] = useState<MindMapInspectorNode | null>(
+    null,
+  );
+  const [zoomPercent, setZoomPercent] = useState(
+    Math.round((initialMindMapData.view?.state.scale ?? 1) * 100),
+  );
+  const [themeConfig, setThemeConfig] = useState<MindMapThemeConfig>(
+    initialMindMapData.theme.config,
+  );
+  const [documentStats, setDocumentStats] = useState<MindMapDocumentStats>(
+    countMindMapDocumentStats(initialMindMapData.root),
+  );
   const [isReady, setIsReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadVersion, setLoadVersion] = useState(0);
+  const [metadataDialogKind, setMetadataDialogKind] =
+    useState<MindMapMetadataDialogKind | null>(null);
   const updatePageMutation = useUpdatePageMutation();
   const updateTitleMutation = useUpdateTitlePageMutation();
 
-  const fitCanvas = useCallback(() => {
-    mindMapRef.current?.resize?.();
-    const view = mindMapRef.current?.view as any;
-    view?.fit?.();
+  const syncSelectionSnapshot = useCallback(
+    (mindMap?: SimpleMindMapApi | null) => {
+      const target = mindMap ?? mindMapRef.current;
+      const activeNodeList = target?.renderer.activeNodeList ?? [];
+      setActiveNodeCount(activeNodeList.length);
+      setSelectedNode(
+        activeNodeList.length > 0
+          ? createInspectorNodeSnapshot(activeNodeList[0])
+          : null,
+      );
+    },
+    [],
+  );
+
+  const syncThemeConfigState = useCallback(
+    (mindMap?: SimpleMindMapApi | null) => {
+      const target = mindMap ?? mindMapRef.current;
+      if (!target) {
+        return;
+      }
+
+      setThemeConfig(
+        normalizeMindMapThemeConfig(target.getCustomThemeConfig()),
+      );
+    },
+    [],
+  );
+
+  const syncZoomState = useCallback((mindMap?: SimpleMindMapApi | null) => {
+    setZoomPercent(getZoomPercent(mindMap ?? mindMapRef.current));
   }, []);
+
+  const syncDocumentState = useCallback((mindMap?: SimpleMindMapApi | null) => {
+    const target = mindMap ?? mindMapRef.current;
+    if (!target) {
+      return;
+    }
+
+    setDocumentStats(countMindMapDocumentStats(target.getData()));
+  }, []);
+
+  const fitCanvas = useCallback(() => {
+    const mindMap = mindMapRef.current;
+    if (!mindMap) {
+      return;
+    }
+
+    mindMap.resize();
+    mindMap.view.fit();
+    syncZoomState(mindMap);
+  }, [syncZoomState]);
+
+  const centerCanvas = useCallback(() => {
+    const mindMap = mindMapRef.current;
+    if (!mindMap) {
+      return;
+    }
+
+    mindMap.renderer.setRootNodeCenter();
+    syncZoomState(mindMap);
+  }, [syncZoomState]);
 
   useEffect(() => {
     pageRef.current = page;
+    const mindMapData = getMindMapData(page.content);
+
     setTitle(page.title || "");
     setLastSavedAt(page.updatedAt ? new Date(page.updatedAt) : null);
-    setLayout(getMindMapData(page.content).layout);
+    setLayout(mindMapData.layout);
+    setThemeConfig(mindMapData.theme.config);
+    setDocumentStats(countMindMapDocumentStats(mindMapData.root));
+    setZoomPercent(Math.round((mindMapData.view?.state.scale ?? 1) * 100));
+    setSelectedNode(null);
+    setActiveNodeCount(0);
+    setMetadataDialogKind(null);
   }, [page]);
 
   const persistMindMap = useCallback(async () => {
@@ -273,7 +650,7 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
         content: createMindMapContentFromData(currentData),
         format: MINDMAP_CONTENT_FORMAT,
         contentType: "mindmap",
-      } as any);
+      } as never);
 
       pageRef.current = updatedPage;
       updatePageData(updatedPage);
@@ -321,7 +698,7 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
         const updatedPage = await updateTitleMutation.mutateAsync({
           pageId: currentPage.id,
           title: trimmedTitle,
-        } as any);
+        } as never);
         pageRef.current = updatedPage;
         updatePageData(updatedPage);
       } catch (error) {
@@ -338,10 +715,19 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
     const mindMapData = getMindMapData(page.content);
     const container = containerRef.current;
     let cancelled = false;
-    let currentMindMap: MindMapInstance | null = null;
-    let cleanupSelectionState: ((...args: any[]) => void) | null = null;
-    let cleanupMarkDirty: (() => void) | null = null;
-    let cleanupLayoutChange: ((nextLayout: string) => void) | null = null;
+    let currentMindMap: SimpleMindMapApi | null = null;
+    let cleanupSelectionState: (() => void) | null = null;
+    let cleanupDataChange: (() => void) | null = null;
+    let cleanupViewChange: (() => void) | null = null;
+    let cleanupLayoutChange: ((nextLayout: unknown) => void) | null = null;
+    let cleanupNodeClick: ((node: unknown, event: unknown) => void) | null =
+      null;
+    let cleanupBeforeTextEdit: (() => void) | null = null;
+    let cleanupHideTextEdit:
+      | ((textEditNode: unknown, activeNodes: unknown, node: unknown) => void)
+      | null = null;
+    let cleanupTextEditPasteListener: (() => void) | null = null;
+    let cleanupPasteFallbackTimer: (() => void) | null = null;
     let resizeObserver: ResizeObserver | null = null;
 
     if (!container) {
@@ -350,9 +736,12 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
 
     isHydratingRef.current = true;
     isDirtyRef.current = false;
+    markDirtyRef.current = () => undefined;
     setIsReady(false);
     setLoadError(null);
     setActiveNodeCount(0);
+    setSelectedNode(null);
+    setMetadataDialogKind(null);
 
     container.innerHTML = "";
 
@@ -369,6 +758,16 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
           return;
         }
 
+        let pasteFallbackTimer = 0;
+        let isTextEditPasteBound = false;
+
+        const clearPasteFallbackTimer = () => {
+          if (pasteFallbackTimer) {
+            window.clearTimeout(pasteFallbackTimer);
+            pasteFallbackTimer = 0;
+          }
+        };
+
         const mindMap = new MindMap({
           el: container,
           data: mindMapData.root,
@@ -379,7 +778,18 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
           readonly: !editable,
           mousewheelAction: "zoom",
           fit: !initialViewData,
-        } as any);
+          handleNodePasteImg: async (blob: Blob) => {
+            clearPasteFallbackTimer();
+            const payload = await buildMindMapImagePayloadFromBlob(blob);
+            return {
+              url: payload.url,
+              size: {
+                width: payload.width,
+                height: payload.height,
+              },
+            };
+          },
+        });
 
         if (cancelled) {
           mindMap.destroy();
@@ -388,10 +798,9 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
 
         currentMindMap = mindMap;
         mindMapRef.current = mindMap;
-
-        const syncSelectionState = (_node?: any, activeNodeList?: any[]) => {
-          setActiveNodeCount(activeNodeList?.length ?? 0);
-        };
+        mindMap.keyCommand?.addShortcut("Control+Shift+z", () => {
+          mindMap.execCommand("FORWARD");
+        });
 
         const markDirty = () => {
           if (isHydratingRef.current) {
@@ -414,19 +823,201 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
           debouncedPersist();
         };
 
-        const handleLayoutChange = (nextLayout: string) => {
-          setLayout(nextLayout);
+        const handleSelectionChange = () => {
+          syncSelectionSnapshot(mindMap);
+        };
+
+        const getActiveNodesForAssetUpdate = () => {
+          let activeNodeList = mindMap.renderer.activeNodeList ?? [];
+          if (
+            activeNodeList.length === 0 &&
+            mindMap.renderer.root &&
+            editable
+          ) {
+            try {
+              mindMap.execCommand(
+                "SET_NODE_ACTIVE",
+                mindMap.renderer.root,
+                true,
+              );
+            } catch (error) {
+              console.error(
+                "Failed to focus root node for asset update",
+                error,
+              );
+            }
+            activeNodeList = mindMap.renderer.activeNodeList ?? [];
+          }
+          return activeNodeList;
+        };
+
+        const applyImagePayloadToSelection = (
+          payload: MindMapNodeImagePayload,
+        ) => {
+          const activeNodeList = getActiveNodesForAssetUpdate();
+          if (activeNodeList.length === 0) {
+            return;
+          }
+
+          activeNodeList.forEach((node) => {
+            mindMap.execCommand("SET_NODE_IMAGE", node, payload);
+          });
+
+          syncSelectionSnapshot(mindMap);
+          syncDocumentState(mindMap);
+        };
+
+        const handleEditorPaste = (event: ClipboardEvent) => {
+          if (!editable || !isMindMapTextEditTarget(event.target)) {
+            return;
+          }
+
+          const clipboardImage = getClipboardImageFile(event.clipboardData);
+          if (!clipboardImage) {
+            return;
+          }
+
+          clearPasteFallbackTimer();
+          pasteFallbackTimer = window.setTimeout(() => {
+            if (cancelled) {
+              return;
+            }
+
+            buildMindMapImagePayloadFromBlob(clipboardImage)
+              .then((payload) => {
+                applyImagePayloadToSelection(payload);
+              })
+              .catch((error) => {
+                console.error("Failed to paste clipboard image", error);
+              })
+              .finally(() => {
+                pasteFallbackTimer = 0;
+              });
+          }, 180);
+        };
+
+        const bindTextEditPasteFallback = () => {
+          if (isTextEditPasteBound) {
+            return;
+          }
+
+          document.addEventListener("paste", handleEditorPaste, true);
+          isTextEditPasteBound = true;
+        };
+
+        const unbindTextEditPasteFallback = () => {
+          if (!isTextEditPasteBound) {
+            return;
+          }
+
+          document.removeEventListener("paste", handleEditorPaste, true);
+          isTextEditPasteBound = false;
+        };
+
+        const handleDataChange = () => {
+          markDirty();
+          syncSelectionSnapshot(mindMap);
+          syncDocumentState(mindMap);
+        };
+
+        const handleViewChange = () => {
+          markDirty();
+          syncZoomState(mindMap);
+        };
+
+        const handleLayoutChange = (nextLayout: unknown) => {
+          setLayout(
+            typeof nextLayout === "string"
+              ? (nextLayout as MindMapLayoutValue)
+              : mindMap.getLayout(),
+          );
           markDirty();
         };
 
-        cleanupSelectionState = syncSelectionState;
-        cleanupMarkDirty = markDirty;
-        cleanupLayoutChange = handleLayoutChange;
+        const handleNodeClick = (node: unknown, event: unknown) => {
+          if (
+            !isSimpleMindMapNode(node) ||
+            !hasModifierKey(event) ||
+            isHyperlinkIconTarget(event)
+          ) {
+            return;
+          }
 
-        mindMap.on("data_change", markDirty);
-        mindMap.on("view_data_change", markDirty);
+          const hyperlink = getSafeHyperlink(
+            toTextValue(node.getData("hyperlink")),
+          );
+          if (!hyperlink) {
+            return;
+          }
+
+          stopDomEvent(event);
+          window.open(hyperlink, "_blank", "noopener,noreferrer");
+        };
+
+        const handleHideTextEdit = (
+          _textEditNode: unknown,
+          _activeNodes: unknown,
+          currentNode: unknown,
+        ) => {
+          unbindTextEditPasteFallback();
+          clearPasteFallbackTimer();
+
+          if (!isSimpleMindMapNode(currentNode)) {
+            return;
+          }
+
+          const currentHyperlink = toTextValue(
+            currentNode.getData("hyperlink"),
+          );
+          const normalizedHyperlink = getSafeHyperlink(currentHyperlink);
+
+          if (normalizedHyperlink && normalizedHyperlink !== currentHyperlink) {
+            mindMap.execCommand(
+              "SET_NODE_HYPERLINK",
+              currentNode,
+              normalizedHyperlink,
+              toTextValue(currentNode.getData("hyperlinkTitle")),
+            );
+            return;
+          }
+
+          if (currentHyperlink.trim()) {
+            return;
+          }
+
+          const detectedHyperlink = getAutoDetectedNodeHyperlink(
+            toTextValue(currentNode.getData("text")),
+          );
+          if (!detectedHyperlink) {
+            return;
+          }
+
+          mindMap.execCommand(
+            "SET_NODE_HYPERLINK",
+            currentNode,
+            detectedHyperlink,
+            toTextValue(currentNode.getData("hyperlinkTitle")),
+          );
+        };
+
+        cleanupSelectionState = handleSelectionChange;
+        cleanupDataChange = handleDataChange;
+        cleanupViewChange = handleViewChange;
+        cleanupLayoutChange = handleLayoutChange;
+        cleanupNodeClick = handleNodeClick;
+        cleanupBeforeTextEdit = bindTextEditPasteFallback;
+        cleanupHideTextEdit = handleHideTextEdit;
+        cleanupTextEditPasteListener = unbindTextEditPasteFallback;
+        cleanupPasteFallbackTimer = clearPasteFallbackTimer;
+        markDirtyRef.current = markDirty;
+
+        mindMap.on("data_change", handleDataChange);
+        mindMap.on("view_data_change", handleViewChange);
         mindMap.on("layout_change", handleLayoutChange);
-        mindMap.on("node_active", syncSelectionState);
+        mindMap.on("node_active", handleSelectionChange);
+        mindMap.on("node_click", handleNodeClick);
+        mindMap.on("before_show_text_edit", bindTextEditPasteFallback);
+        mindMap.on("hide_text_edit", handleHideTextEdit);
 
         lastSavedFingerprintRef.current = createFingerprint(
           mindMap.getData(true),
@@ -448,7 +1039,7 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
 
           mindMap.resize();
 
-          if (editable && mindMap.renderer?.root) {
+          if (editable && mindMap.renderer.root) {
             try {
               mindMap.execCommand(
                 "SET_NODE_ACTIVE",
@@ -461,7 +1052,10 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
           }
 
           setLayout(mindMap.getLayout());
-          setActiveNodeCount(mindMap.renderer?.activeNodeList?.length ?? 0);
+          syncSelectionSnapshot(mindMap);
+          syncDocumentState(mindMap);
+          syncZoomState(mindMap);
+          syncThemeConfigState(mindMap);
           setSaveState("saved");
           setIsReady(true);
 
@@ -494,16 +1088,36 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
       resizeObserver?.disconnect();
       debouncedPersist.flush();
       persistTitle.flush();
-      currentMindMap?.off("data_change", cleanupMarkDirty as any);
-      currentMindMap?.off("view_data_change", cleanupMarkDirty as any);
-      currentMindMap?.off("layout_change", cleanupLayoutChange as any);
-      currentMindMap?.off("node_active", cleanupSelectionState as any);
+      currentMindMap?.off("data_change", cleanupDataChange ?? undefined);
+      currentMindMap?.off("view_data_change", cleanupViewChange ?? undefined);
+      currentMindMap?.off("layout_change", cleanupLayoutChange ?? undefined);
+      currentMindMap?.off("node_active", cleanupSelectionState ?? undefined);
+      currentMindMap?.off("node_click", cleanupNodeClick ?? undefined);
+      currentMindMap?.off(
+        "before_show_text_edit",
+        cleanupBeforeTextEdit ?? undefined,
+      );
+      currentMindMap?.off("hide_text_edit", cleanupHideTextEdit ?? undefined);
+      cleanupTextEditPasteListener?.();
+      cleanupPasteFallbackTimer?.();
       currentMindMap?.destroy();
+      markDirtyRef.current = () => undefined;
       if (mindMapRef.current === currentMindMap) {
         mindMapRef.current = null;
       }
     };
-  }, [debouncedPersist, editable, loadVersion, page.id, persistTitle]);
+  }, [
+    debouncedPersist,
+    editable,
+    loadVersion,
+    page.content,
+    page.id,
+    persistTitle,
+    syncDocumentState,
+    syncSelectionSnapshot,
+    syncThemeConfigState,
+    syncZoomState,
+  ]);
 
   useEffect(() => {
     const mindMap = mindMapRef.current;
@@ -528,6 +1142,12 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
     return () => window.removeEventListener("beforeunload", handleBeforeUnload);
   }, []);
 
+  useEffect(() => {
+    if (!selectedNode && metadataDialogKind) {
+      setMetadataDialogKind(null);
+    }
+  }, [metadataDialogKind, selectedNode]);
+
   const layoutOptions = useMemo(
     () =>
       MINDMAP_LAYOUT_OPTIONS.map((option) => ({
@@ -537,276 +1157,418 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
     [t],
   );
 
+  const ensureActiveNodes = useCallback((focusRootIfEmpty = false) => {
+    const mindMap = mindMapRef.current;
+    if (!mindMap) {
+      return [] as SimpleMindMapNode[];
+    }
+
+    let activeNodeList = mindMap.renderer.activeNodeList ?? [];
+    if (
+      focusRootIfEmpty &&
+      activeNodeList.length === 0 &&
+      mindMap.renderer.root
+    ) {
+      try {
+        mindMap.execCommand("SET_NODE_ACTIVE", mindMap.renderer.root, true);
+      } catch (error) {
+        console.error(
+          "Failed to focus root node before running command",
+          error,
+        );
+      }
+
+      activeNodeList = mindMap.renderer.activeNodeList ?? [];
+    }
+
+    return activeNodeList;
+  }, []);
+
   const runCommand = useCallback(
-    (command: string, ...args: any[]) => {
+    (command: string, ...args: unknown[]) => {
       if (!editable) {
         return;
       }
 
       const mindMap = mindMapRef.current;
-      const activeNodeList = mindMap?.renderer?.activeNodeList ?? [];
-      const rootNode = mindMap?.renderer?.root;
-
-      if (
-        COMMANDS_REQUIRING_ACTIVE_NODE.has(command) &&
-        activeNodeList.length === 0 &&
-        rootNode
-      ) {
-        try {
-          mindMap?.execCommand("SET_NODE_ACTIVE", rootNode, true);
-        } catch (error) {
-          console.error("Failed to focus root node before running command", {
-            command,
-            error,
-          });
-        }
+      if (!mindMap) {
+        return;
       }
 
-      mindMapRef.current?.execCommand(command, ...args);
-      setActiveNodeCount(
-        mindMapRef.current?.renderer?.activeNodeList?.length ?? 0,
-      );
+      if (COMMANDS_REQUIRING_ACTIVE_NODE.has(command)) {
+        ensureActiveNodes(true);
+      }
+
+      mindMap.execCommand(command, ...args);
+      syncSelectionSnapshot(mindMap);
+      syncDocumentState(mindMap);
+      syncZoomState(mindMap);
     },
-    [editable],
+    [
+      editable,
+      ensureActiveNodes,
+      syncDocumentState,
+      syncSelectionSnapshot,
+      syncZoomState,
+    ],
   );
 
+  const applyNodeStyleChange = useCallback(
+    (patch: Partial<MindMapEditableNodeStyle>) => {
+      if (!editable) {
+        return;
+      }
+
+      const mindMap = mindMapRef.current;
+      if (!mindMap) {
+        return;
+      }
+
+      const activeNodeList = ensureActiveNodes();
+      if (activeNodeList.length === 0) {
+        return;
+      }
+
+      activeNodeList.forEach((node) => {
+        mindMap.execCommand("SET_NODE_STYLES", node, patch);
+      });
+
+      syncSelectionSnapshot(mindMap);
+      syncDocumentState(mindMap);
+    },
+    [editable, ensureActiveNodes, syncDocumentState, syncSelectionSnapshot],
+  );
+
+  const resetNodeStyles = useCallback(() => {
+    if (!editable) {
+      return;
+    }
+
+    const mindMap = mindMapRef.current;
+    if (!mindMap) {
+      return;
+    }
+
+    const activeNodeList = ensureActiveNodes();
+    activeNodeList.forEach((node) => {
+      mindMap.execCommand("REMOVE_CUSTOM_STYLES", node);
+    });
+
+    syncSelectionSnapshot(mindMap);
+    syncDocumentState(mindMap);
+  }, [editable, ensureActiveNodes, syncDocumentState, syncSelectionSnapshot]);
+
+  const updateThemeConfig = useCallback(
+    (nextConfig: MindMapThemeConfig) => {
+      if (!editable) {
+        return;
+      }
+
+      const mindMap = mindMapRef.current;
+      if (!mindMap) {
+        return;
+      }
+
+      mindMap.setThemeConfig(nextConfig);
+      syncThemeConfigState(mindMap);
+      syncSelectionSnapshot(mindMap);
+      markDirtyRef.current();
+    },
+    [editable, syncSelectionSnapshot, syncThemeConfigState],
+  );
+
+  const handleSelectThemePreset = useCallback(
+    (presetId: (typeof THEME_PRESETS)[number]["id"]) => {
+      updateThemeConfig(
+        buildMindMapThemeConfigFromPreset(presetId, themeConfig),
+      );
+    },
+    [themeConfig, updateThemeConfig],
+  );
+
+  const handleCanvasSettingsChange = useCallback(
+    (patch: Partial<MindMapCanvasSettings>) => {
+      const currentSettings = getMindMapCanvasSettings(themeConfig);
+      updateThemeConfig(
+        applyCanvasSettingsToThemeConfig(themeConfig, {
+          ...currentSettings,
+          ...patch,
+        }),
+      );
+    },
+    [themeConfig, updateThemeConfig],
+  );
+
+  const handleLayoutChange = useCallback(
+    (nextLayout: MindMapLayoutValue) => {
+      if (!editable) {
+        return;
+      }
+
+      const mindMap = mindMapRef.current;
+      if (!mindMap) {
+        return;
+      }
+
+      mindMap.setLayout(nextLayout);
+      setLayout(nextLayout);
+      syncSelectionSnapshot(mindMap);
+      syncDocumentState(mindMap);
+    },
+    [editable, syncDocumentState, syncSelectionSnapshot],
+  );
+
+  const handleZoomIn = useCallback(() => {
+    const mindMap = mindMapRef.current;
+    if (!mindMap) {
+      return;
+    }
+
+    mindMap.view.enlarge();
+    syncZoomState(mindMap);
+  }, [syncZoomState]);
+
+  const handleZoomOut = useCallback(() => {
+    const mindMap = mindMapRef.current;
+    if (!mindMap) {
+      return;
+    }
+
+    mindMap.view.narrow();
+    syncZoomState(mindMap);
+  }, [syncZoomState]);
+
+  const applyToActiveNodes = useCallback(
+    (updater: (mindMap: SimpleMindMapApi, node: SimpleMindMapNode) => void) => {
+      const mindMap = mindMapRef.current;
+      if (!mindMap || !editable) {
+        return;
+      }
+
+      const activeNodeList = ensureActiveNodes();
+      if (activeNodeList.length === 0) {
+        return;
+      }
+
+      activeNodeList.forEach((node) => {
+        updater(mindMap, node);
+      });
+
+      syncSelectionSnapshot(mindMap);
+      syncDocumentState(mindMap);
+      setMetadataDialogKind(null);
+    },
+    [editable, ensureActiveNodes, syncDocumentState, syncSelectionSnapshot],
+  );
+
+  const applyNoteContent = useCallback(
+    (value: string) => {
+      applyToActiveNodes((mindMap, node) => {
+        mindMap.execCommand("SET_NODE_NOTE", node, value);
+      });
+    },
+    [applyToActiveNodes],
+  );
+
+  const applyTagContent = useCallback(
+    (value: string[]) => {
+      applyToActiveNodes((mindMap, node) => {
+        mindMap.execCommand("SET_NODE_TAG", node, value);
+      });
+    },
+    [applyToActiveNodes],
+  );
+
+  const applyImageContent = useCallback(
+    (value: MindMapNodeImagePayload) => {
+      applyToActiveNodes((mindMap, node) => {
+        mindMap.execCommand("SET_NODE_IMAGE", node, value);
+      });
+    },
+    [applyToActiveNodes],
+  );
+
+  const applyHyperlinkContent = useCallback(
+    (value: MindMapHyperlinkPayload) => {
+      const hyperlink = getSafeHyperlink(value.url);
+      applyToActiveNodes((mindMap, node) => {
+        mindMap.execCommand(
+          "SET_NODE_HYPERLINK",
+          node,
+          hyperlink,
+          value.title.trim(),
+        );
+      });
+    },
+    [applyToActiveNodes],
+  );
+
+  const applySummaryContent = useCallback(
+    (value: string) => {
+      const nextText = value.trim();
+      if (!nextText) {
+        return;
+      }
+
+      const mindMap = mindMapRef.current;
+      if (!mindMap || !editable) {
+        return;
+      }
+
+      const activeNodeList = ensureActiveNodes();
+      if (activeNodeList.length === 0) {
+        return;
+      }
+
+      const nodesWithoutSummary: SimpleMindMapNode[] = [];
+
+      activeNodeList.forEach((node) => {
+        if (node.isGeneralization) {
+          mindMap.execCommand("SET_NODE_TEXT", node, nextText, false, false);
+          return;
+        }
+
+        const generalizationList = getGeneralizationList(
+          node.getData("generalization"),
+        );
+
+        if (generalizationList.length === 0) {
+          nodesWithoutSummary.push(node);
+          return;
+        }
+
+        const nextGeneralization = generalizationList.map((item, index) =>
+          index === 0 ? { ...item, text: nextText } : item,
+        );
+
+        mindMap.execCommand("SET_NODE_DATA", node, {
+          generalization:
+            nextGeneralization.length === 1
+              ? nextGeneralization[0]
+              : nextGeneralization,
+        });
+      });
+
+      if (nodesWithoutSummary.length > 0) {
+        mindMap.execCommand("ADD_GENERALIZATION", { text: nextText }, false);
+      }
+
+      syncSelectionSnapshot(mindMap);
+      syncDocumentState(mindMap);
+    },
+    [editable, ensureActiveNodes, syncDocumentState, syncSelectionSnapshot],
+  );
+
+  const removeSummaryContent = useCallback(() => {
+    const mindMap = mindMapRef.current;
+    if (!mindMap || !editable) {
+      return;
+    }
+
+    const activeNodeList = ensureActiveNodes();
+    if (activeNodeList.length === 0) {
+      return;
+    }
+
+    if (activeNodeList.some((node) => node.isGeneralization)) {
+      mindMap.execCommand("REMOVE_NODE");
+    } else {
+      mindMap.execCommand("REMOVE_GENERALIZATION");
+    }
+
+    syncSelectionSnapshot(mindMap);
+    syncDocumentState(mindMap);
+  }, [editable, ensureActiveNodes, syncDocumentState, syncSelectionSnapshot]);
+
   const saveStatusLabel = getSaveStatusLabel(saveState, lastSavedAt);
+  const themePresetId = getMindMapThemePresetId(themeConfig);
+  const canvasSettings = getMindMapCanvasSettings(themeConfig);
+  const canvasBackground = themeConfig.docmostCanvasBackground || "#f3f4f6";
+  const gridColor = themeConfig.docmostGridColor || "rgba(148, 163, 184, 0.18)";
 
   return (
-    <div className={classes.shell}>
-      <div className={classes.topBar}>
-        <div className={classes.topMeta}>
-          <Button
-            component={Link}
-            to={getSpaceUrl(page?.space?.slug)}
-            variant="default"
-            radius="xl"
-            className={classes.backButton}
-          >
-            {t("返回空间")}
-          </Button>
-          <TextInput
-            value={title}
-            onChange={(event) => {
-              const nextTitle = event.currentTarget.value;
-              setTitle(nextTitle);
-              persistTitle(nextTitle);
-            }}
-            onBlur={() => persistTitle.flush()}
-            className={classes.titleInput}
-            size="md"
-            radius="xl"
-            fw={700}
-            readOnly={!editable}
+    <>
+      <div className={classes.shell}>
+        <MindmapTopToolbar
+          editable={editable}
+          isSaving={saveState === "saving"}
+          saveStatusLabel={saveStatusLabel}
+          selectedNodeCount={activeNodeCount}
+          spaceUrl={getSpaceUrl(page?.space?.slug)}
+          title={title}
+          onSave={() => persistMindMap().catch((error) => console.error(error))}
+          onTitleBlur={() => persistTitle.flush()}
+          onTitleChange={(nextTitle) => {
+            setTitle(nextTitle);
+            persistTitle(nextTitle);
+          }}
+          onUndo={() => runCommand("BACK")}
+          onRedo={() => runCommand("FORWARD")}
+          onInsertChild={() => runCommand("INSERT_CHILD_NODE")}
+          onInsertSibling={() => runCommand("INSERT_NODE")}
+          onDelete={() => runCommand("REMOVE_NODE")}
+          onOpenImage={() => setMetadataDialogKind("image")}
+          onOpenHyperlink={() => setMetadataDialogKind("hyperlink")}
+          onOpenNote={() => setMetadataDialogKind("note")}
+          onOpenTag={() => setMetadataDialogKind("tag")}
+          onAddSummary={() => runCommand("ADD_GENERALIZATION")}
+        />
+
+        <div className={classes.workspace}>
+          <MindmapCanvas
+            canvasBackground={canvasBackground}
+            gridColor={gridColor}
+            isReady={isReady}
+            loadError={loadError}
+            onFit={fitCanvas}
+            onRetry={() => setLoadVersion((value) => value + 1)}
+            showGrid={canvasSettings.showGrid}
+            containerRef={containerRef}
           />
-          <span className={classes.status}>{t(saveStatusLabel)}</span>
+
+          <MindmapRightPanel
+            editable={editable && isReady}
+            layout={layout}
+            layoutOptions={layoutOptions}
+            selectedNode={selectedNode}
+            selectedNodeCount={activeNodeCount}
+            themePresetId={themePresetId}
+            themePresets={THEME_PRESETS}
+            canvasSettings={canvasSettings}
+            onLayoutChange={handleLayoutChange}
+            onNodeStyleChange={applyNodeStyleChange}
+            onResetNodeStyle={resetNodeStyles}
+            onSelectThemePreset={handleSelectThemePreset}
+            onCanvasSettingsChange={handleCanvasSettingsChange}
+            onOpenImageDialog={() => setMetadataDialogKind("image")}
+            onOpenHyperlinkDialog={() => setMetadataDialogKind("hyperlink")}
+            onApplyNote={applyNoteContent}
+            onApplyTags={applyTagContent}
+            onApplySummary={applySummaryContent}
+            onRemoveSummary={removeSummaryContent}
+          />
         </div>
 
-        <Group gap="xs">
-          <Tooltip label={t("撤销")} withArrow>
-            <ActionIcon
-              variant="default"
-              radius="xl"
-              size="lg"
-              onClick={() => runCommand("BACK")}
-              disabled={!editable}
-            >
-              <IconArrowBackUp size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <Tooltip label={t("重做")} withArrow>
-            <ActionIcon
-              variant="default"
-              radius="xl"
-              size="lg"
-              onClick={() => runCommand("FORWARD")}
-              disabled={!editable}
-            >
-              <IconArrowForwardUp size={18} />
-            </ActionIcon>
-          </Tooltip>
-          <Button
-            radius="xl"
-            color="dark"
-            leftSection={<IconCheck size={16} />}
-            onClick={() =>
-              persistMindMap().catch((error) => console.error(error))
-            }
-            loading={saveState === "saving"}
-            disabled={!editable}
-          >
-            {t("保存")}
-          </Button>
-        </Group>
+        <MindmapBottomBar
+          isReady={isReady}
+          stats={documentStats}
+          zoomPercent={zoomPercent}
+          onCenter={centerCanvas}
+          onFit={fitCanvas}
+          onZoomIn={handleZoomIn}
+          onZoomOut={handleZoomOut}
+        />
       </div>
 
-      <div className={classes.workspace}>
-        <div className={classes.sidePanel}>
-          <Paper className={classes.panelCard}>
-            <h2 className={classes.panelTitle}>{t("分支操作")}</h2>
-            <p className={classes.panelText}>
-              {activeNodeCount > 0
-                ? t(
-                    "当前已选中节点，你可以继续新增分支、调整层级，或者直接删除它。",
-                  )
-                : t("先点击一个节点，然后再使用这些操作来新增或删除分支。")}
-            </p>
-
-            <div className={classes.buttonGrid}>
-              <Button
-                variant="light"
-                radius="xl"
-                onClick={() => runCommand("INSERT_CHILD_NODE")}
-                disabled={!editable}
-              >
-                {t("添加子节点")}
-              </Button>
-              <Button
-                variant="light"
-                radius="xl"
-                onClick={() => runCommand("INSERT_AFTER")}
-                disabled={!editable}
-              >
-                {t("添加同级节点")}
-              </Button>
-              <Button
-                variant="light"
-                radius="xl"
-                onClick={() => runCommand("INSERT_PARENT_NODE")}
-                disabled={!editable}
-              >
-                {t("添加父节点")}
-              </Button>
-              <Button
-                variant="light"
-                color="red"
-                radius="xl"
-                onClick={() => runCommand("REMOVE_NODE")}
-                disabled={!editable}
-              >
-                {t("删除节点")}
-              </Button>
-            </div>
-          </Paper>
-
-          <Paper className={classes.panelCard}>
-            <h2 className={classes.panelTitle}>{t("视图与布局")}</h2>
-            <p className={classes.panelText}>
-              {t(
-                "你可以切换结构样式、重新整理布局，也可以一键展开或收起整张图。",
-              )}
-            </p>
-
-            <Select
-              mt="md"
-              radius="xl"
-              label={t("布局")}
-              value={layout}
-              data={layoutOptions}
-              onChange={(value) => {
-                if (!value) {
-                  return;
-                }
-                mindMapRef.current?.setLayout(value);
-              }}
-              disabled={!isReady}
-            />
-
-            <div className={classes.secondaryGrid}>
-              <Button
-                variant="default"
-                radius="xl"
-                onClick={() => runCommand("EXPAND_ALL")}
-                disabled={!editable}
-              >
-                {t("全部展开")}
-              </Button>
-              <Button
-                variant="default"
-                radius="xl"
-                onClick={() => runCommand("UNEXPAND_ALL")}
-                disabled={!editable}
-              >
-                {t("全部收起")}
-              </Button>
-              <Button
-                variant="default"
-                radius="xl"
-                onClick={() => runCommand("RESET_LAYOUT")}
-                disabled={!editable}
-              >
-                {t("重置布局")}
-              </Button>
-              <Button
-                variant="default"
-                radius="xl"
-                onClick={fitCanvas}
-                disabled={!isReady}
-              >
-                {t("适配画布")}
-              </Button>
-            </div>
-          </Paper>
-
-          <Paper className={classes.panelCard}>
-            <Group gap="sm" wrap="nowrap">
-              <IconMap2 size={20} stroke={1.8} color="#2563eb" />
-              <div>
-                <Text fw={800} c="dark.8">
-                  {t("使用提示")}
-                </Text>
-                <Text size="sm" c="dimmed">
-                  {t(
-                    "双击节点可以直接改名，拖动分支可以重新组织结构，滚轮可以缩放画布。",
-                  )}
-                </Text>
-              </div>
-            </Group>
-          </Paper>
-        </div>
-
-        <div className={classes.canvasPanel}>
-          {loadError && (
-            <div className={classes.loaderOverlay}>
-              <Paper className={classes.errorCard}>
-                <h3 className={classes.errorTitle}>{t("加载失败")}</h3>
-                <p className={classes.errorText}>{t(loadError)}</p>
-                <Group mt="md" gap="sm">
-                  <Button
-                    radius="xl"
-                    variant="default"
-                    onClick={() => setLoadVersion((value) => value + 1)}
-                  >
-                    {t("重试")}
-                  </Button>
-                  <Button
-                    radius="xl"
-                    variant="subtle"
-                    onClick={fitCanvas}
-                    disabled={!mindMapRef.current}
-                  >
-                    {t("适配画布")}
-                  </Button>
-                </Group>
-              </Paper>
-            </div>
-          )}
-          {!isReady && !loadError && (
-            <div className={classes.loaderOverlay}>
-              <Loader color="blue" />
-            </div>
-          )}
-          <div ref={containerRef} className={classes.canvas} />
-          <div className={classes.canvasHint}>
-            <h3 className={classes.hintTitle}>{t("快速开始")}</h3>
-            <p className={classes.hintText}>
-              {t(
-                "双击任意节点即可编辑文字。左侧操作面板会对当前选中的节点生效，内容也会自动保存。",
-              )}
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
+      <MindmapNodeMetadataDialog
+        dialogKind={metadataDialogKind}
+        selectedNode={selectedNode}
+        onClose={() => setMetadataDialogKind(null)}
+        onApplyImage={applyImageContent}
+        onApplyHyperlink={applyHyperlinkContent}
+        onApplyNote={(value) => applyNoteContent(value)}
+        onApplyTag={(value) => applyTagContent(value)}
+      />
+    </>
   );
 }

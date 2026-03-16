@@ -1,42 +1,22 @@
 import { PageContentFormat } from "@/features/page/types/page.types.ts";
+import {
+  getDefaultMindMapThemeConfig,
+  normalizeMindMapThemeConfig,
+} from "@/features/mindmap/lib/mindmap-theme.ts";
+import type {
+  MindMapDocumentStats,
+  MindMapFullData,
+  MindMapLayoutValue,
+  MindMapNode,
+  MindMapNodeData,
+  MindMapPageContent,
+  MindMapThemeConfig,
+  MindMapViewData,
+} from "@/features/mindmap/types/mindmap.types.ts";
 
 export const MINDMAP_PAGE_ICON = "🗺️";
 export const DEFAULT_MINDMAP_TITLE = "未命名思维导图";
 export const MINDMAP_CONTENT_FORMAT = PageContentFormat.JSON;
-
-export type MindMapFullData = {
-  layout: string;
-  root: {
-    data: Record<string, any> & {
-      text: string;
-      expand?: boolean;
-    };
-    children?: MindMapNode[];
-  };
-  theme: {
-    template: string;
-    config: Record<string, any>;
-  };
-  view:
-    | {
-        transform: Record<string, any>;
-        state: Record<string, any>;
-      }
-    | null;
-};
-
-export type MindMapNode = {
-  data: Record<string, any> & {
-    text: string;
-    expand?: boolean;
-  };
-  children?: MindMapNode[];
-};
-
-export type MindMapPageContent = {
-  type: "mindmap";
-  data: MindMapFullData;
-};
 
 export const MINDMAP_LAYOUT_OPTIONS = [
   {
@@ -95,11 +75,148 @@ export const MINDMAP_LAYOUT_OPTIONS = [
     value: "rightFishbone2",
     label: "向右鱼骨图 2",
   },
-];
+] as const satisfies ReadonlyArray<{
+  value: MindMapLayoutValue;
+  label: string;
+}>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
+}
+
+function isMindMapLayoutValue(value: unknown): value is MindMapLayoutValue {
+  return MINDMAP_LAYOUT_OPTIONS.some((option) => option.value === value);
+}
+
+function isMindMapNodeData(value: unknown): value is MindMapNodeData {
+  return isRecord(value) && isString(value.text);
+}
+
+function isValidMindMapRoot(root: unknown): root is MindMapNode {
+  return Boolean(
+    isRecord(root) &&
+      isMindMapNodeData(root.data) &&
+      (root.children === undefined || Array.isArray(root.children)),
+  );
+}
+
+function isValidMindMapView(view: unknown): view is MindMapViewData {
+  return Boolean(
+    isRecord(view) &&
+      isRecord(view.transform) &&
+      isRecord(view.state) &&
+      typeof view.state.scale === "number" &&
+      typeof view.state.x === "number" &&
+      typeof view.state.y === "number" &&
+      typeof view.state.sx === "number" &&
+      typeof view.state.sy === "number",
+  );
+}
+
+function normalizeMindMapNode(
+  node: unknown,
+  fallbackText: string,
+  forceExpand = false,
+): MindMapNode {
+  const source = isRecord(node) ? node : {};
+  const sourceData = isMindMapNodeData(source.data)
+    ? source.data
+    : ({ text: fallbackText } as MindMapNodeData);
+  const normalizedData: MindMapNodeData = {
+    ...sourceData,
+    text: sourceData.text.trim() ? sourceData.text : fallbackText,
+  };
+
+  if (forceExpand) {
+    normalizedData.expand = true;
+  } else if (typeof sourceData.expand !== "boolean") {
+    normalizedData.expand = true;
+  }
+
+  return {
+    data: normalizedData,
+    children: Array.isArray(source.children)
+      ? source.children.map((child, index) =>
+          normalizeMindMapNode(child, `${fallbackText}-${index + 1}`),
+        )
+      : [],
+  };
+}
+
+function normalizeThemeConfig(config: unknown): MindMapThemeConfig {
+  return normalizeMindMapThemeConfig(config);
+}
+
+function countGeneralizationStats(
+  generalization: unknown,
+): MindMapDocumentStats {
+  if (!generalization) {
+    return {
+      characterCount: 0,
+      nodeCount: 0,
+    };
+  }
+
+  const list = Array.isArray(generalization)
+    ? generalization
+    : [generalization];
+
+  return list.reduce<MindMapDocumentStats>(
+    (accumulator, item) => {
+      if (isRecord(item) && isString(item.text)) {
+        accumulator.nodeCount += 1;
+        accumulator.characterCount += item.text.length;
+      }
+
+      return accumulator;
+    },
+    {
+      characterCount: 0,
+      nodeCount: 0,
+    },
+  );
+}
+
+function countNodeStats(node: unknown): MindMapDocumentStats {
+  if (!isValidMindMapRoot(node)) {
+    return {
+      characterCount: 0,
+      nodeCount: 0,
+    };
+  }
+
+  const ownStats = countGeneralizationStats(node.data.generalization);
+  const childrenStats = (node.children ?? []).reduce<MindMapDocumentStats>(
+    (accumulator, child) => {
+      const childStats = countNodeStats(child);
+
+      return {
+        characterCount: accumulator.characterCount + childStats.characterCount,
+        nodeCount: accumulator.nodeCount + childStats.nodeCount,
+      };
+    },
+    {
+      characterCount: 0,
+      nodeCount: 0,
+    },
+  );
+
+  return {
+    characterCount:
+      node.data.text.length +
+      ownStats.characterCount +
+      childrenStats.characterCount,
+    nodeCount: 1 + ownStats.nodeCount + childrenStats.nodeCount,
+  };
+}
 
 export function createEmptyMindMapData(): MindMapFullData {
   return {
-    layout: "logicalStructure",
+    layout: "mindMap",
     root: {
       data: {
         text: "中心主题",
@@ -124,7 +241,7 @@ export function createEmptyMindMapData(): MindMapFullData {
     },
     theme: {
       template: "default",
-      config: {},
+      config: getDefaultMindMapThemeConfig(),
     },
     view: null,
   };
@@ -137,96 +254,52 @@ export function createEmptyMindMapContent(): MindMapPageContent {
   };
 }
 
-function isValidMindMapRoot(root: any): root is MindMapFullData["root"] {
-  return Boolean(
-    root &&
-      typeof root === "object" &&
-      root.data &&
-      typeof root.data === "object" &&
-      typeof root.data.text === "string",
-  );
-}
-
-function isValidMindMapView(
-  view: any,
-): view is NonNullable<MindMapFullData["view"]> {
-  return Boolean(
-    view &&
-      typeof view === "object" &&
-      view.transform &&
-      typeof view.transform === "object" &&
-      view.state &&
-      typeof view.state === "object",
-  );
-}
-
-function normalizeMindMapNode(
-  node: any,
-  fallbackText: string,
-  forceExpand = false,
-): MindMapNode {
-  const sourceData =
-    node?.data && typeof node.data === "object" ? node.data : ({} as any);
-  const normalizedData: MindMapNode["data"] = {
-    ...sourceData,
-    text:
-      typeof sourceData.text === "string" && sourceData.text.trim()
-        ? sourceData.text
-        : fallbackText,
-  };
-
-  if (forceExpand) {
-    normalizedData.expand = true;
-  } else if (typeof sourceData.expand !== "boolean") {
-    normalizedData.expand = true;
-  }
-
-  return {
-    data: normalizedData,
-    children: Array.isArray(node?.children)
-      ? node.children.map((child: any, index: number) =>
-          normalizeMindMapNode(child, `${fallbackText}-${index + 1}`, false),
-        )
-      : [],
-  };
-}
-
 export function isMindMapPageContent(
-  content: any,
+  content: unknown,
 ): content is MindMapPageContent {
   return Boolean(
-    content?.type === "mindmap" && isValidMindMapRoot(content?.data?.root),
+    isRecord(content) &&
+      content.type === "mindmap" &&
+      isRecord(content.data) &&
+      isValidMindMapRoot(content.data.root),
   );
 }
 
-export function getMindMapData(content: any): MindMapFullData {
+export function getMindMapData(content: unknown): MindMapFullData {
   const fallback = createEmptyMindMapData();
-  const data = isMindMapPageContent(content) ? content.data : content;
+  const data =
+    isMindMapPageContent(content) && isRecord(content.data)
+      ? content.data
+      : content;
+  const themeSource =
+    isRecord(data) && isRecord(data.theme) ? data.theme : undefined;
 
-  if (!data || !isValidMindMapRoot(data.root)) {
+  if (!isRecord(data) || !isValidMindMapRoot(data.root)) {
     return fallback;
   }
 
   return {
-    layout: typeof data.layout === "string" ? data.layout : fallback.layout,
+    layout: isMindMapLayoutValue(data.layout) ? data.layout : fallback.layout,
     root: normalizeMindMapNode(data.root, fallback.root.data.text, true),
     theme: {
-      template:
-        typeof data.theme?.template === "string"
-          ? data.theme.template
-          : fallback.theme.template,
-      config:
-        data.theme?.config && typeof data.theme.config === "object"
-          ? data.theme.config
-          : fallback.theme.config,
+      template: isString(themeSource?.template)
+        ? themeSource.template
+        : fallback.theme.template,
+      config: normalizeThemeConfig(themeSource?.config),
     },
     view: isValidMindMapView(data.view) ? data.view : fallback.view,
   };
 }
 
-export function createMindMapContentFromData(data: any): MindMapPageContent {
+export function createMindMapContentFromData(
+  data: unknown,
+): MindMapPageContent {
   return {
     type: "mindmap",
     data: getMindMapData(data),
   };
+}
+
+export function countMindMapDocumentStats(root: unknown): MindMapDocumentStats {
+  return countNodeStats(root);
 }
