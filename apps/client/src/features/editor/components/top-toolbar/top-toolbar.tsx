@@ -70,6 +70,7 @@ export function TopToolbar({ editor }: TopToolbarProps) {
       bulletList: ctx.editor.isActive("bulletList"),
       orderedList: ctx.editor.isActive("orderedList"),
       blockquote: ctx.editor.isActive("blockquote"),
+      callout: ctx.editor.isActive("callout"),
       alignLeft: ctx.editor.isActive({ textAlign: "left" }),
       alignCenter: ctx.editor.isActive({ textAlign: "center" }),
       alignRight: ctx.editor.isActive({ textAlign: "right" }),
@@ -91,6 +92,15 @@ export function TopToolbar({ editor }: TopToolbarProps) {
       </ActionIcon>
     </Tooltip>
   );
+
+  const toggleHighlightBlock = () => {
+    if (editor.isActive("callout")) {
+      editor.chain().focus().unsetCallout().run();
+      return;
+    }
+
+    editor.chain().focus().toggleCallout({ type: "info" }).run();
+  };
 
   const blockLabel = state.h1
     ? "标题 1"
@@ -229,6 +239,21 @@ export function TopToolbar({ editor }: TopToolbarProps) {
             </ScrollArea.Autosize>
           </Popover.Dropdown>
         </Popover>
+
+        <Tooltip label="高亮块" withArrow>
+          <UnstyledButton
+            className={clsx(classes.switchBtn, {
+              [classes.switchActive]: state.callout,
+            })}
+            aria-pressed={state.callout}
+            onClick={toggleHighlightBlock}
+          >
+            <span className={classes.switchTrack}>
+              <span className={classes.switchThumb} />
+            </span>
+            <span className={classes.switchLabel}>高亮块</span>
+          </UnstyledButton>
+        </Tooltip>
 
         <div className={classes.divider} />
 

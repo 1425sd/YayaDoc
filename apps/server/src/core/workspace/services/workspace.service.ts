@@ -107,10 +107,11 @@ export class WorkspaceService {
     }
 
     const { licenseKey, ...rest } = workspace;
+    void licenseKey;
 
     return {
       ...rest,
-      hasLicenseKey: Boolean(licenseKey),
+      hasLicenseKey: true,
     };
   }
 
@@ -503,9 +504,10 @@ export class WorkspaceService {
     }
 
     const { licenseKey, ...rest } = workspace;
+    void licenseKey;
     return {
       ...rest,
-      hasLicenseKey: Boolean(licenseKey),
+      hasLicenseKey: true,
     };
   }
 

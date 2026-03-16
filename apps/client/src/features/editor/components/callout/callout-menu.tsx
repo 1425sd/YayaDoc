@@ -6,20 +6,14 @@ import {
   EditorMenuProps,
   ShouldShowProps,
 } from "@/features/editor/components/table/types/types.ts";
-import { ActionIcon, Tooltip } from "@mantine/core";
+import { ActionIcon, Box, Tooltip } from "@mantine/core";
 import clsx from "clsx";
-import {
-  IconAlertTriangleFilled,
-  IconCircleCheckFilled,
-  IconCircleXFilled,
-  IconInfoCircleFilled,
-  IconMoodSmile,
-  IconNotes,
-} from "@tabler/icons-react";
+import { IconMoodSmile, IconX } from "@tabler/icons-react";
 import { CalloutType, isTextSelected } from "@docmost/editor-ext";
 import { useTranslation } from "react-i18next";
 import EmojiPicker from "@/components/ui/emoji-picker.tsx";
 import classes from "../common/toolbar-menu.module.css";
+import { CALLOUT_PALETTE } from "@/features/editor/components/callout/callout-palette.ts";
 
 export function CalloutMenu({ editor }: EditorMenuProps) {
   const { t } = useTranslation();
@@ -107,6 +101,14 @@ export function CalloutMenu({ editor }: EditorMenuProps) {
       .run();
   }, [editor]);
 
+  const unsetCallout = useCallback(() => {
+    editor
+      .chain()
+      .focus(undefined, { scrollIntoView: false })
+      .unsetCallout()
+      .run();
+  }, [editor]);
+
   const getCurrentIcon = () => {
     const { selection } = editor.state;
     const predicate = (node: PMNode) => node.type.name === "callout";
@@ -132,74 +134,66 @@ export function CalloutMenu({ editor }: EditorMenuProps) {
       shouldShow={shouldShow}
     >
       <div className={classes.toolbar}>
-        <Tooltip position="top" label={t("Info")} withinPortal={false}>
+        {CALLOUT_PALETTE.map((item) => {
+          const isActive =
+            item.type === "info"
+              ? editorState?.isInfo
+              : item.type === "note"
+                ? editorState?.isNote
+                : item.type === "success"
+                  ? editorState?.isSuccess
+                  : item.type === "warning"
+                    ? editorState?.isWarning
+                    : editorState?.isDanger;
+
+          return (
+            <Tooltip
+              key={item.type}
+              position="top"
+              label={t(item.name)}
+              withinPortal={false}
+            >
+              <ActionIcon
+                onClick={() => setCalloutType(item.type)}
+                size="lg"
+                aria-label={t(item.name)}
+                variant="subtle"
+                className={clsx({ [classes.active]: isActive })}
+              >
+                <Box
+                  className={classes.calloutSwatch}
+                  style={
+                    {
+                      "--callout-swatch-bg": item.background,
+                      "--callout-swatch-border": item.border,
+                      "--callout-swatch-accent": item.accent,
+                    } as React.CSSProperties
+                  }
+                />
+              </ActionIcon>
+            </Tooltip>
+          );
+        })}
+
+        <div className={classes.divider} />
+
+        <Tooltip
+          position="top"
+          label={t("Turn off highlight block")}
+          withinPortal={false}
+        >
           <ActionIcon
-            onClick={() => setCalloutType("info")}
+            onClick={unsetCallout}
             size="lg"
-            aria-label={t("Info")}
+            aria-label={t("Turn off highlight block")}
             variant="subtle"
-            className={clsx({ [classes.active]: editorState?.isInfo })}
+            className={classes.destructive}
           >
-            <IconInfoCircleFilled
-              size={18}
-              color="var(--mantine-color-blue-5)"
-            />
+            <IconX size={18} stroke={2.2} />
           </ActionIcon>
         </Tooltip>
 
-        <Tooltip position="top" label={t("Note")} withinPortal={false}>
-          <ActionIcon
-            onClick={() => setCalloutType("note")}
-            size="lg"
-            aria-label={t("Note")}
-            variant="subtle"
-            className={clsx({ [classes.active]: editorState?.isNote })}
-          >
-            <IconNotes size={18} color="var(--mantine-color-grape-5)" />
-          </ActionIcon>
-        </Tooltip>
-
-        <Tooltip position="top" label={t("Success")} withinPortal={false}>
-          <ActionIcon
-            onClick={() => setCalloutType("success")}
-            size="lg"
-            aria-label={t("Success")}
-            variant="subtle"
-            className={clsx({ [classes.active]: editorState?.isSuccess })}
-          >
-            <IconCircleCheckFilled
-              size={18}
-              color="var(--mantine-color-green-5)"
-            />
-          </ActionIcon>
-        </Tooltip>
-
-        <Tooltip position="top" label={t("Warning")} withinPortal={false}>
-          <ActionIcon
-            onClick={() => setCalloutType("warning")}
-            size="lg"
-            aria-label={t("Warning")}
-            variant="subtle"
-            className={clsx({ [classes.active]: editorState?.isWarning })}
-          >
-            <IconAlertTriangleFilled
-              size={18}
-              color="var(--mantine-color-orange-5)"
-            />
-          </ActionIcon>
-        </Tooltip>
-
-        <Tooltip position="top" label={t("Danger")} withinPortal={false}>
-          <ActionIcon
-            onClick={() => setCalloutType("danger")}
-            size="lg"
-            aria-label={t("Danger")}
-            variant="subtle"
-            className={clsx({ [classes.active]: editorState?.isDanger })}
-          >
-            <IconCircleXFilled size={18} color="var(--mantine-color-red-5)" />
-          </ActionIcon>
-        </Tooltip>
+        <div className={classes.divider} />
 
         <EmojiPicker
           onEmojiSelect={setCalloutIcon}

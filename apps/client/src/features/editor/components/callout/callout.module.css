@@ -1,15 +1,51 @@
 .root {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: rem(12px);
+  margin: rem(12px) 0;
+  padding: rem(14px) rem(16px);
   overflow: visible;
+  border: rem(1px) solid var(--callout-border);
+  border-radius: rem(18px);
+  background: var(--callout-bg);
+  box-shadow: 0 rem(12px) rem(26px) rgba(148, 163, 184, 0.12);
+
+  @mixin dark {
+    box-shadow: 0 rem(12px) rem(30px) rgba(2, 6, 23, 0.28);
+  }
+}
+
+.root::before {
+  content: "";
+  position: absolute;
+  inset: rem(-1px) auto rem(-1px) rem(-1px);
+  width: rem(5px);
+  border-radius: rem(18px) 0 0 rem(18px);
+  background: var(--callout-accent);
+}
+
+.root[data-has-icon] {
+  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .icon {
-  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: rem(30px);
+  height: rem(30px);
+  margin-top: rem(2px);
+  border-radius: rem(10px);
+  background: var(--callout-icon-bg);
+  color: var(--callout-accent);
+  font-size: rem(18px);
   line-height: 1;
-  width: 20px;
-  height: 20px;
-  margin-inline-end: var(--mantine-spacing-xs);
-  margin-top: 4px;
-  cursor: pointer;
+  box-shadow: inset 0 0 0 rem(1px) rgba(255, 255, 255, 0.4);
+}
+
+.content {
+  min-width: 0;
 }
 
 .message {
@@ -19,4 +55,12 @@
   text-overflow: unset;
   word-break: break-word;
   overflow-wrap: break-word;
+}
+
+.message > :first-child {
+  margin-top: 0;
+}
+
+.message > :last-child {
+  margin-bottom: 0;
 }

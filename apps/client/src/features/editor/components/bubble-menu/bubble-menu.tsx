@@ -17,6 +17,7 @@ import { ActionIcon, Button, rem, Tooltip } from "@mantine/core";
 import { ColorSelector } from "./color-selector";
 import { NodeSelector } from "./node-selector";
 import { TextAlignmentSelector } from "./text-alignment-selector";
+import { HighlightBlockSelector } from "./highlight-block-selector";
 import {
   draftCommentIdAtom,
   showCommentPopupAtom,
@@ -162,6 +163,11 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
     icon: IconMessage,
   };
 
+  const [isNodeSelectorOpen, setIsNodeSelectorOpen] = useState(false);
+  const [isTextAlignmentSelectorOpen, setIsTextAlignmentOpen] = useState(false);
+  const [isLinkSelectorOpen, setIsLinkSelectorOpen] = useState(false);
+  const [isColorSelectorOpen, setIsColorSelectorOpen] = useState(false);
+
   const bubbleMenuProps: EditorBubbleMenuProps = {
     ...props,
     shouldShow: ({ state, editor }) => {
@@ -194,11 +200,6 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
       },
     },
   };
-
-  const [isNodeSelectorOpen, setIsNodeSelectorOpen] = useState(false);
-  const [isTextAlignmentSelectorOpen, setIsTextAlignmentOpen] = useState(false);
-  const [isLinkSelectorOpen, setIsLinkSelectorOpen] = useState(false);
-  const [isColorSelectorOpen, setIsColorSelectorOpen] = useState(false);
 
   // Hide the bubble menu immediately when AI menu is shown
   if (showAiMenu) return null;
@@ -235,6 +236,8 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
             setIsColorSelectorOpen(false);
           }}
         />
+
+        <HighlightBlockSelector editor={props.editor} />
 
         <TextAlignmentSelector
           editor={props.editor}

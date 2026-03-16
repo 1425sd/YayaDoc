@@ -82,7 +82,7 @@ export function SpaceSidebar() {
           />
         </div>
 
-        <div className={classes.section}>
+        <div className={clsx(classes.section, classes.sectionMenu)}>
           <div className={classes.menuItems}>
             <UnstyledButton
               component={Link}

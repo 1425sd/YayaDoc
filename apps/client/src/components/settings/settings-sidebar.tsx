@@ -189,9 +189,7 @@ export default function SettingsSidebar() {
   };
 
   const isItemDisabled = (item: DataItem) => {
-    if (item.showDisabledInNonEE && item.isEnterprise) {
-      return !(isCloud() || workspace?.hasLicenseKey);
-    }
+    void item;
     return false;
   };
 

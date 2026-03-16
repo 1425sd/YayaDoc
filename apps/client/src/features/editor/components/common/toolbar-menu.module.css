@@ -20,6 +20,21 @@
     background-color: light-dark(var(--mantine-color-blue-0), var(--mantine-color-dark-5));
 }
 
+.toolbar .destructive {
+  --ai-color: light-dark(var(--mantine-color-red-7), var(--mantine-color-red-3)) !important;
+  --ai-hover: light-dark(rgba(254, 226, 226, 0.9), rgba(127, 29, 29, 0.28)) !important;
+}
+
+.calloutSwatch {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--callout-swatch-border);
+  border-radius: 6px;
+  background: var(--callout-swatch-bg);
+  box-shadow: inset 4px 0 0 var(--callout-swatch-accent);
+}
+
 .divider {
   width: 1px;
   height: 16px;

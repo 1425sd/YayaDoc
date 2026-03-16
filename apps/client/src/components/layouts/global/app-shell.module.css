@@ -1,8 +1,22 @@
-.header, .navbar, .aside {
-  background-color: light-dark(#f6f7f9, var(--mantine-color-dark-8));
+.header,
+.navbar,
+.aside {
+  background:
+    radial-gradient(circle at top left, rgba(96, 165, 250, 0.16), transparent 32%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 250, 252, 0.82));
+  border: rem(1px) solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 rem(18px) rem(42px) rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(rem(10px));
+}
+
+.header {
+  border-bottom-color: rgba(148, 163, 184, 0.16);
 }
 
 .navbar, .aside {
+  border-radius: rem(28px);
+  overflow: hidden;
+
   @media (max-width: $mantine-breakpoint-sm) {
     width: 350px;
   }
@@ -12,6 +26,43 @@
   @media (max-width: $mantine-breakpoint-sm) {
     margin-top: 45px;
   }
+}
+
+.main {
+  position: relative;
+  min-height: calc(100vh - 45px);
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.12), transparent 24%),
+    radial-gradient(circle at top right, rgba(251, 191, 36, 0.16), transparent 22%),
+    radial-gradient(circle at bottom left, rgba(14, 165, 233, 0.08), transparent 24%),
+    linear-gradient(180deg, #f5f9ff 0%, #f8fbff 42%, #fff9f1 100%);
+}
+
+.mainContentFrame {
+  position: relative;
+  overflow: hidden;
+  border: rem(1px) solid rgba(148, 163, 184, 0.16);
+  border-radius: rem(34px);
+  padding: clamp(rem(18px), 2vw, rem(28px));
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.76), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.6));
+  box-shadow: 0 rem(24px) rem(72px) rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(rem(8px));
+}
+
+.mainContentFrame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(135deg, rgba(59, 130, 246, 0.06), transparent 38%),
+    linear-gradient(315deg, rgba(251, 191, 36, 0.08), transparent 34%);
+}
+
+.settingsContentFrame {
+  padding-block: clamp(rem(20px), 2vw, rem(30px));
 }
 
 .resizeHandle {
@@ -27,5 +78,4 @@
     background: light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-5))
   }
 }
-
 

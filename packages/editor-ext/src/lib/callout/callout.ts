@@ -5,6 +5,7 @@ import {
   wrappingInputRule,
 } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
+import { findWrapping } from "@tiptap/pm/transform";
 import { ReactNodeViewRenderer } from "@tiptap/react";
 import { CalloutType, getValidCalloutType } from "./utils";
 
@@ -104,14 +105,57 @@ export const Callout = Node.create<CalloutOptions>({
 
       unsetCallout:
         () =>
-        ({ commands }) => {
-          return commands.lift(this.name);
+        ({ state, dispatch }) => {
+          const parent = findParentNode((node) => node.type === this.type)(
+            state.selection,
+          );
+
+          if (!parent) {
+            return false;
+          }
+
+          const { node, pos } = parent;
+          const tr = state.tr.replaceWith(pos, pos + node.nodeSize, node.content);
+          const nextSelectionPos = Math.min(
+            pos + 1,
+            Math.max(1, tr.doc.content.size),
+          );
+
+          tr.setSelection(TextSelection.near(tr.doc.resolve(nextSelectionPos)));
+
+          if (dispatch) {
+            dispatch(tr.scrollIntoView());
+          }
+
+          return true;
         },
 
       toggleCallout:
         (attributes) =>
-        ({ commands }) => {
-          return commands.toggleWrap(this.name, attributes);
+        ({ state, commands, dispatch }) => {
+          if (commands.toggleWrap(this.name, attributes)) {
+            return true;
+          }
+
+          const range = state.selection.$from.blockRange(state.selection.$to);
+
+          if (!range) {
+            return false;
+          }
+
+          const wrapping = findWrapping(range, this.type, attributes);
+
+          if (!wrapping) {
+            return false;
+          }
+
+          const tr = state.tr.wrap(range, wrapping);
+
+          if (dispatch) {
+            dispatch(tr.scrollIntoView());
+          }
+
+          return true;
         },
 
       updateCalloutType:

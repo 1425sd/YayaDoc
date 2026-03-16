@@ -1,6 +1,7 @@
 import { AppShell, Container } from "@mantine/core";
 import React, { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
+import clsx from "clsx";
 import SettingsSidebar from "@/components/settings/settings-sidebar.tsx";
 import { useAtom } from "jotai";
 import {
@@ -79,6 +80,16 @@ export default function GlobalAppShell({
   const isPageRoute = location.pathname.includes("/p/");
   const hideSidebar =
     isHomeRoute || isSpacesRoute || isBoardRoute || isMindMapRoute;
+  const isSpaceOverviewRoute =
+    isSpaceRoute && !isBoardRoute && !isMindMapRoute && !isPageRoute;
+  const useFramedContent =
+    isSettingsRoute || isHomeRoute || isSpacesRoute || isSpaceOverviewRoute;
+
+  const mainContent = isSettingsRoute ? (
+    <Container size={850}>{children}</Container>
+  ) : (
+    children
+  );
 
   return (
     <AppShell
@@ -116,11 +127,18 @@ export default function GlobalAppShell({
           {isSettingsRoute && <SettingsSidebar />}
         </AppShell.Navbar>
       )}
-      <AppShell.Main>
-        {isSettingsRoute ? (
-          <Container size={850}>{children}</Container>
+      <AppShell.Main className={classes.main}>
+        {useFramedContent ? (
+          <div
+            className={clsx(
+              classes.mainContentFrame,
+              isSettingsRoute && classes.settingsContentFrame,
+            )}
+          >
+            {mainContent}
+          </div>
         ) : (
-          children
+          mainContent
         )}
       </AppShell.Main>
 

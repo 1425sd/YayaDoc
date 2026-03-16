@@ -69,6 +69,8 @@ import { useEditorScroll } from "./hooks/use-editor-scroll";
 import { EditorAiMenu } from "@/ee/ai/components/editor/ai-menu/ai-menu";
 import ColumnsMenu from "@/features/editor/components/columns/columns-menu.tsx";
 import { BlockHandleMenu } from "@/features/editor/components/block-handle/block-handle-menu.tsx";
+import { PageContentFormat } from "@/features/page/types/page.types.ts";
+import { updatePage } from "@/features/page/services/page-service.ts";
 
 interface PageEditorProps {
   pageId: string;
@@ -107,6 +109,17 @@ export default function PageEditor({
   const slugId = extractPageSlugId(pageSlug);
   const userPageEditMode =
     currentUser?.user?.settings?.preferences?.pageEditMode ?? PageEditMode.Edit;
+
+  useEffect(() => {
+    return () => {
+      // Jotai infers this primitive atom setter incorrectly in this file.
+      // The existing editor mount path already needs the same escape hatch.
+      // @ts-expect-error local atom setter typing mismatch
+      setEditor(null);
+      editorRef.current = null;
+    };
+  }, [setEditor]);
+
   const canScroll = useCallback(
     () => Boolean(isComponentMounted.current && editorRef.current),
     [isComponentMounted],
@@ -216,70 +229,68 @@ export default function PageEditor({
     ];
   }, [providersReady, currentUser?.user]);
 
+  const sharedEditorProps = useMemo(
+    () => ({
+      scrollThreshold: 80,
+      scrollMargin: 80,
+      handleDOMEvents: {
+        keydown: (_view, event) => {
+          if ((event.ctrlKey || event.metaKey) && event.code === "KeyS") {
+            event.preventDefault();
+            return true;
+          }
+          if ((event.ctrlKey || event.metaKey) && event.code === "KeyK") {
+            searchSpotlight.open();
+            return true;
+          }
+          if (["ArrowUp", "ArrowDown", "Enter"].includes(event.key)) {
+            const slashCommand = document.querySelector("#slash-command");
+            if (slashCommand) {
+              return true;
+            }
+          }
+          if (
+            ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter"].includes(
+              event.key,
+            )
+          ) {
+            const emojiCommand = document.querySelector("#emoji-command");
+            if (emojiCommand) {
+              return true;
+            }
+          }
+        },
+      },
+      handlePaste: (_view, event) => {
+        if (!editorRef.current) return false;
+
+        return handlePaste(
+          editorRef.current,
+          event,
+          pageId,
+          currentUser?.user.id,
+        );
+      },
+      handleDrop: (_view, event, _slice, moved) => {
+        if (!editorRef.current) return false;
+
+        return handleFileDrop(editorRef.current, event, moved, pageId);
+      },
+    }),
+    [currentUser?.user.id, pageId],
+  );
+
   const editor = useEditor(
     {
       extensions,
       editable,
       immediatelyRender: true,
       shouldRerenderOnTransaction: false,
-      editorProps: {
-        scrollThreshold: 80,
-        scrollMargin: 80,
-        handleDOMEvents: {
-          keydown: (_view, event) => {
-            if ((event.ctrlKey || event.metaKey) && event.code === "KeyS") {
-              event.preventDefault();
-              return true;
-            }
-            if ((event.ctrlKey || event.metaKey) && event.code === "KeyK") {
-              searchSpotlight.open();
-              return true;
-            }
-            if (["ArrowUp", "ArrowDown", "Enter"].includes(event.key)) {
-              const slashCommand = document.querySelector("#slash-command");
-              if (slashCommand) {
-                return true;
-              }
-            }
-            if (
-              [
-                "ArrowUp",
-                "ArrowDown",
-                "ArrowLeft",
-                "ArrowRight",
-                "Enter",
-              ].includes(event.key)
-            ) {
-              const emojiCommand = document.querySelector("#emoji-command");
-              if (emojiCommand) {
-                return true;
-              }
-            }
-          },
-        },
-        handlePaste: (_view, event) => {
-          if (!editorRef.current) return false;
-
-          return handlePaste(
-            editorRef.current,
-            event,
-            pageId,
-            currentUser?.user.id,
-          );
-        },
-        handleDrop: (_view, event, _slice, moved) => {
-          if (!editorRef.current) return false;
-
-          return handleFileDrop(editorRef.current, event, moved, pageId);
-        },
-      },
+      editorProps: sharedEditorProps,
       onCreate({ editor }) {
         if (editor) {
-          // @ts-ignore
-          setEditor(editor);
-          // @ts-ignore
-          editor.storage.pageId = pageId;
-          handleScrollTo(editor);
+          (editor.storage as typeof editor.storage & { pageId?: string }).pageId =
+            pageId;
           editorRef.current = editor;
         }
       },
@@ -290,15 +301,8 @@ export default function PageEditor({
         debouncedUpdateContent(editorJson);
       },
     },
-    [pageId, editable, extensions],
+    [pageId, editable, extensions, sharedEditorProps],
   );
-
-  const editorIsEditable = useEditorState({
-    editor,
-    selector: (ctx) => {
-      return ctx.editor?.isEditable ?? false;
-    },
-  });
 
   const debouncedUpdateContent = useDebouncedCallback((newContent: any) => {
     const pageData = queryClient.getQueryData<IPage>(["pages", slugId]);
@@ -311,6 +315,19 @@ export default function PageEditor({
       });
     }
   }, 3000);
+
+  const saveOfflineContent = useDebouncedCallback((newContent: any) => {
+    void updatePage(
+      {
+        pageId,
+        content: newContent,
+        format: PageContentFormat.JSON,
+        operation: "replace",
+      } as any,
+    ).catch((error) => {
+      console.error("Failed to save offline editor content", error);
+    });
+  }, 1200);
 
   const handleActiveCommentEvent = (event) => {
     const { commentId, resolved } = event.detail;
@@ -374,6 +391,44 @@ export default function PageEditor({
 
   const hasConnectedOnceRef = useRef(false);
   const [showStatic, setShowStatic] = useState(true);
+  const shouldUseOfflineEditor =
+    editable &&
+    userPageEditMode === PageEditMode.Edit &&
+    yjsConnectionStatus === WebSocketStatus.Disconnected &&
+    !hasConnectedOnceRef.current;
+
+  const offlineEditor = useEditor(
+    {
+      extensions: mainExtensions,
+      editable,
+      content,
+      immediatelyRender: true,
+      shouldRerenderOnTransaction: false,
+      editorProps: sharedEditorProps,
+      onCreate({ editor }) {
+        if (editor) {
+          (editor.storage as typeof editor.storage & { pageId?: string }).pageId =
+            pageId;
+          editorRef.current = editor;
+        }
+      },
+      onUpdate({ editor }) {
+        const editorJson = editor.getJSON();
+        debouncedUpdateContent(editorJson);
+        saveOfflineContent(editorJson);
+      },
+    },
+    [editable, pageId, sharedEditorProps],
+  );
+
+  const activeEditor = shouldUseOfflineEditor ? offlineEditor : editor;
+
+  const editorIsEditable = useEditorState({
+    editor: activeEditor,
+    selector: (ctx) => {
+      return ctx.editor?.isEditable ?? false;
+    },
+  });
 
   useEffect(() => {
     if (
@@ -386,7 +441,39 @@ export default function PageEditor({
     }
   }, [yjsConnectionStatus, isSynced]);
 
-  if (showStatic) {
+  useEffect(() => {
+    if (shouldUseOfflineEditor) {
+      setShowStatic(false);
+    }
+  }, [shouldUseOfflineEditor]);
+
+  useEffect(() => {
+    if (!activeEditor || (showStatic && !shouldUseOfflineEditor)) {
+      return;
+    }
+
+    // Jotai infers this primitive atom setter incorrectly in this file.
+    // @ts-expect-error local atom setter typing mismatch
+    setEditor(activeEditor);
+    (activeEditor.storage as typeof activeEditor.storage & { pageId?: string }).pageId =
+      pageId;
+    handleScrollTo(activeEditor);
+    editorRef.current = activeEditor;
+  }, [activeEditor, handleScrollTo, pageId, setEditor]);
+
+  useEffect(() => {
+    if (!offlineEditor) {
+      return;
+    }
+
+    if (editable && userPageEditMode === PageEditMode.Edit) {
+      offlineEditor.setEditable(true);
+    } else {
+      offlineEditor.setEditable(false);
+    }
+  }, [editable, offlineEditor, userPageEditMode]);
+
+  if (showStatic && !shouldUseOfflineEditor) {
     return (
       <EditorProvider
         editable={false}
@@ -400,33 +487,35 @@ export default function PageEditor({
   return (
     <div className="editor-container" style={{ position: "relative" }}>
       <div ref={menuContainerRef}>
-        <EditorContent editor={editor} />
+        <EditorContent editor={activeEditor} />
 
-        {editor && (
-          <SearchAndReplaceDialog editor={editor} editable={editable} />
+        {activeEditor && (
+          <SearchAndReplaceDialog editor={activeEditor} editable={editable} />
         )}
 
-        {editor && editorIsEditable && (
+        {activeEditor && editorIsEditable && (
           <div>
-            <EditorAiMenu editor={editor} />
-            <EditorBubbleMenu editor={editor} />
-            <TableMenu editor={editor} />
-            <TableCellMenu editor={editor} appendTo={menuContainerRef} />
-            <ImageMenu editor={editor} />
-            <VideoMenu editor={editor} />
-            <CalloutMenu editor={editor} />
-            <SubpagesMenu editor={editor} />
-            <ExcalidrawMenu editor={editor} />
-            <DrawioMenu editor={editor} />
-            <ColumnsMenu editor={editor} />
-            <LinkMenu editor={editor} appendTo={menuContainerRef} />
-            <BlockHandleMenu editor={editor} />
+            <EditorAiMenu editor={activeEditor} />
+            <EditorBubbleMenu editor={activeEditor} />
+            <TableMenu editor={activeEditor} />
+            <TableCellMenu editor={activeEditor} appendTo={menuContainerRef} />
+            <ImageMenu editor={activeEditor} />
+            <VideoMenu editor={activeEditor} />
+            <CalloutMenu editor={activeEditor} />
+            <SubpagesMenu editor={activeEditor} />
+            <ExcalidrawMenu editor={activeEditor} />
+            <DrawioMenu editor={activeEditor} />
+            <ColumnsMenu editor={activeEditor} />
+            <LinkMenu editor={activeEditor} appendTo={menuContainerRef} />
+            <BlockHandleMenu editor={activeEditor} />
           </div>
         )}
-        {showCommentPopup && <CommentDialog editor={editor} pageId={pageId} />}
+        {showCommentPopup && activeEditor && (
+          <CommentDialog editor={activeEditor} pageId={pageId} />
+        )}
       </div>
       <div
-        onClick={() => editor.commands.focus("end")}
+        onClick={() => activeEditor?.commands.focus("end")}
         style={{ paddingBottom: "20vh" }}
       ></div>
     </div>

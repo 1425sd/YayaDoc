@@ -25,12 +25,21 @@ export function getBackendUrl(): string {
 }
 
 export function getCollaborationUrl(): string {
-  const baseUrl =
-    getConfigValue("COLLAB_URL") ||
-    (import.meta.env.DEV ? process.env.APP_URL : getAppUrl());
+  const configuredUrl = getConfigValue("COLLAB_URL");
+  const collabUrl = configuredUrl
+    ? new URL(configuredUrl, getAppUrl())
+    : new URL("/collab", getAppUrl());
 
-  const collabUrl = new URL("/collab", baseUrl);
-  collabUrl.protocol = collabUrl.protocol === "https:" ? "wss:" : "ws:";
+  if (!collabUrl.pathname || collabUrl.pathname === "/") {
+    collabUrl.pathname = "/collab";
+  }
+
+  if (collabUrl.protocol === "http:") {
+    collabUrl.protocol = "ws:";
+  } else if (collabUrl.protocol === "https:") {
+    collabUrl.protocol = "wss:";
+  }
+
   return collabUrl.toString();
 }
 
