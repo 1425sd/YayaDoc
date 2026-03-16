@@ -83,6 +83,7 @@ export interface IPublicWorkspace {
   logo: string;
   hostname: string;
   enforceSso: boolean;
+  enablePublicSignup: boolean;
   authProviders: IAuthProvider[];
   hasLicenseKey?: boolean;
 }

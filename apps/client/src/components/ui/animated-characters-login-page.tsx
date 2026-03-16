@@ -4,8 +4,12 @@ import clsx from "clsx";
 import { useEffect, useRef, useState } from "react";
 import type { FormEvent, ReactNode, RefObject } from "react";
 import { Link } from "react-router-dom";
-import { IconEye, IconEyeOff, IconSparkles } from "@tabler/icons-react";
+import { IconEye, IconEyeOff } from "@tabler/icons-react";
+import { useTranslation } from "react-i18next";
 import classes from "./animated-characters-login-page.module.css";
+
+const brandIconSrc = "/icons/app-icon-512x512.png";
+const brandWordmarkSrc = "/brand-wordmark.svg";
 
 interface PupilProps {
   mouseX: number;
@@ -24,7 +28,7 @@ interface EyeBallProps extends PupilProps {
   size?: number;
 }
 
-interface AnimatedCharactersLoginPageProps {
+interface AnimatedCharactersAuthPageProps {
   authError?: string;
   bottomHref?: string;
   bottomLabel?: string;
@@ -32,17 +36,33 @@ interface AnimatedCharactersLoginPageProps {
   brandName: string;
   email: string;
   emailError?: ReactNode;
+  confirmPassword?: string;
+  confirmPasswordError?: ReactNode;
   enforceSso?: boolean;
-  forgotPasswordHref: string;
+  forgotPasswordHref?: string;
   isLoading?: boolean;
+  mode: "login" | "register";
+  name?: string;
+  nameError?: ReactNode;
+  onConfirmPasswordBlur?: () => void;
+  onConfirmPasswordChange?: (value: string) => void;
   onEmailBlur?: () => void;
   onEmailChange: (value: string) => void;
+  onNameBlur?: () => void;
+  onNameChange?: (value: string) => void;
   onPasswordBlur?: () => void;
   onPasswordChange: (value: string) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   password: string;
   passwordError?: ReactNode;
+  secondaryActionHref?: string;
+  secondaryActionLabel?: string;
   socialLogin?: ReactNode;
+}
+
+interface BrandLockupProps {
+  brandName: string;
+  className?: string;
 }
 
 function getTrackedPosition(
@@ -186,26 +206,56 @@ function useRandomBlink() {
   return isBlinking;
 }
 
-export function AnimatedCharactersLoginPage({
+function BrandLockup({ brandName, className }: BrandLockupProps) {
+  return (
+    <div className={clsx(classes.brand, className)}>
+      <img
+        src={brandIconSrc}
+        alt=""
+        aria-hidden="true"
+        className={classes.brandIcon}
+      />
+      <img
+        src={brandWordmarkSrc}
+        alt={brandName}
+        className={classes.brandWordmark}
+      />
+    </div>
+  );
+}
+
+export function AnimatedCharactersAuthPage({
   authError,
   bottomHref,
   bottomLabel,
   bottomText,
   brandName,
+  confirmPassword = "",
+  confirmPasswordError,
   email,
   emailError,
   enforceSso = false,
   forgotPasswordHref,
   isLoading = false,
+  mode,
+  name = "",
+  nameError,
+  onConfirmPasswordBlur,
+  onConfirmPasswordChange,
   onEmailBlur,
   onEmailChange,
+  onNameBlur,
+  onNameChange,
   onPasswordBlur,
   onPasswordChange,
   onSubmit,
   password,
   passwordError,
+  secondaryActionHref,
+  secondaryActionLabel,
   socialLogin,
-}: AnimatedCharactersLoginPageProps) {
+}: AnimatedCharactersAuthPageProps) {
+  const { t } = useTranslation();
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [mouseX, setMouseX] = useState(0);
@@ -219,6 +269,9 @@ export function AnimatedCharactersLoginPage({
   const orangeRef = useRef<HTMLDivElement | null>(null);
   const isPurpleBlinking = useRandomBlink();
   const isBlackBlinking = useRandomBlink();
+  const isRegisterMode = mode === "register";
+  const hasPasswordValue =
+    password.length > 0 || (confirmPassword?.length ?? 0) > 0;
 
   useEffect(() => {
     const handleMouseMove = (event: MouseEvent) => {
@@ -249,7 +302,7 @@ export function AnimatedCharactersLoginPage({
   }, [isTyping]);
 
   useEffect(() => {
-    if (!(password.length > 0 && showPassword)) {
+    if (!(hasPasswordValue && showPassword)) {
       setIsPurplePeeking(false);
       return;
     }
@@ -276,7 +329,7 @@ export function AnimatedCharactersLoginPage({
       window.clearTimeout(peekStartTimeoutId);
       window.clearTimeout(peekEndTimeoutId);
     };
-  }, [password.length, showPassword]);
+  }, [confirmPassword?.length, hasPasswordValue, showPassword]);
 
   const calculatePosition = (ref: RefObject<HTMLDivElement | null>) => {
     if (!ref.current) {
@@ -301,19 +354,18 @@ export function AnimatedCharactersLoginPage({
   const yellowPos = calculatePosition(yellowRef);
   const orangePos = calculatePosition(orangeRef);
 
-  const showPasswordReaction = password.length > 0 && showPassword;
-  const hidePasswordReaction = password.length > 0 && !showPassword;
+  const showPasswordReaction = hasPasswordValue && showPassword;
+  const hidePasswordReaction = hasPasswordValue && !showPassword;
+  const submitLabel = isRegisterMode ? t("Sign Up") : t("Sign In");
+  const submitLoadingLabel = isRegisterMode
+    ? t("Creating account...")
+    : t("Signing in...");
 
   return (
     <div className={classes.root}>
       <section className={classes.hero}>
         <div className={classes.heroContent}>
-          <div className={classes.brand}>
-            <span className={classes.brandBadge}>
-              <IconSparkles size={16} />
-            </span>
-            <span className={classes.brandName}>{brandName}</span>
-          </div>
+          <BrandLockup brandName={brandName} />
         </div>
 
         <div className={classes.charactersWrap} aria-hidden="true">
@@ -584,23 +636,57 @@ export function AnimatedCharactersLoginPage({
 
       <section className={classes.panel}>
         <div className={classes.panelInner}>
-          <div className={classes.mobileBrand}>
-            <span className={classes.brandBadge}>
-              <IconSparkles size={16} />
-            </span>
-            <span className={classes.brandName}>{brandName}</span>
-          </div>
+          <BrandLockup brandName={brandName} className={classes.mobileBrand} />
 
           <header className={classes.header}>
-            <h1 className={classes.title}>Welcome back!</h1>
-            <p className={classes.subtitle}>Please enter your details</p>
+            <h1 className={classes.title}>
+              {isRegisterMode
+                ? t("Create your account")
+                : t("Welcome YayaDoc")}
+            </h1>
+            <p className={classes.subtitle}>
+              {isRegisterMode
+                ? t("Create an account to access your workspace.")
+                : t("Please enter your details")}
+            </p>
           </header>
 
           {!enforceSso ? (
             <form className={classes.form} onSubmit={onSubmit}>
+              {isRegisterMode && (
+                <div className={classes.field}>
+                  <label className={classes.label} htmlFor="name">
+                    {t("Display name")}
+                  </label>
+                  <div className={classes.inputWrap}>
+                    <input
+                      id="name"
+                      className={clsx(
+                        classes.input,
+                        nameError && classes.inputError,
+                      )}
+                      type="text"
+                      placeholder={t("How should we call you?")}
+                      value={name}
+                      autoComplete="nickname"
+                      disabled={isLoading}
+                      onBlur={() => {
+                        setIsTyping(false);
+                        onNameBlur?.();
+                      }}
+                      onChange={(event) => onNameChange?.(event.target.value)}
+                      onFocus={() => setIsTyping(true)}
+                    />
+                  </div>
+                  {nameError && (
+                    <div className={classes.fieldError}>{nameError}</div>
+                  )}
+                </div>
+              )}
+
               <div className={classes.field}>
                 <label className={classes.label} htmlFor="email">
-                  Email
+                  {t("Email")}
                 </label>
                 <div className={classes.inputWrap}>
                   <input
@@ -630,7 +716,7 @@ export function AnimatedCharactersLoginPage({
 
               <div className={classes.field}>
                 <label className={classes.label} htmlFor="password">
-                  Password
+                  {t("Password")}
                 </label>
                 <div className={classes.inputWrap}>
                   <input
@@ -643,7 +729,9 @@ export function AnimatedCharactersLoginPage({
                     type={showPassword ? "text" : "password"}
                     placeholder="••••••••"
                     value={password}
-                    autoComplete="current-password"
+                    autoComplete={
+                      isRegisterMode ? "new-password" : "current-password"
+                    }
                     disabled={isLoading}
                     onBlur={onPasswordBlur}
                     onChange={(event) => onPasswordChange(event.target.value)}
@@ -653,7 +741,9 @@ export function AnimatedCharactersLoginPage({
                     type="button"
                     className={classes.toggleButton}
                     aria-label={
-                      showPassword ? "Hide password" : "Show password"
+                      showPassword
+                        ? t("Hide password")
+                        : t("Show password")
                     }
                     onClick={() => setShowPassword((current) => !current)}
                   >
@@ -669,24 +759,75 @@ export function AnimatedCharactersLoginPage({
                 )}
               </div>
 
-              <div className={classes.helperRow}>
-                <label className={classes.remember} htmlFor="remember">
-                  <input
-                    id="remember"
-                    type="checkbox"
-                    className={classes.checkbox}
-                    checked={rememberMe}
-                    onChange={(event) => setRememberMe(event.target.checked)}
-                  />
-                  <span className={classes.rememberLabel}>
-                    Remember for 30 days
-                  </span>
-                </label>
+              {isRegisterMode && (
+                <div className={classes.field}>
+                  <label className={classes.label} htmlFor="confirmPassword">
+                    {t("Confirm password")}
+                  </label>
+                  <div className={classes.inputWrap}>
+                    <input
+                      id="confirmPassword"
+                      className={clsx(
+                        classes.input,
+                        classes.passwordInput,
+                        confirmPasswordError && classes.inputError,
+                      )}
+                      type={showPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      autoComplete="new-password"
+                      disabled={isLoading}
+                      onBlur={onConfirmPasswordBlur}
+                      onChange={(event) =>
+                        onConfirmPasswordChange?.(event.target.value)
+                      }
+                      required
+                    />
+                    <button
+                      type="button"
+                      className={classes.toggleButton}
+                      aria-label={
+                        showPassword
+                          ? t("Hide password")
+                          : t("Show password")
+                      }
+                      onClick={() => setShowPassword((current) => !current)}
+                    >
+                      {showPassword ? (
+                        <IconEyeOff size={18} />
+                      ) : (
+                        <IconEye size={18} />
+                      )}
+                    </button>
+                  </div>
+                  {confirmPasswordError && (
+                    <div className={classes.fieldError}>
+                      {confirmPasswordError}
+                    </div>
+                  )}
+                </div>
+              )}
 
-                <Link className={classes.forgotLink} to={forgotPasswordHref}>
-                  Forgot password?
-                </Link>
-              </div>
+              {!isRegisterMode && forgotPasswordHref && (
+                <div className={classes.helperRow}>
+                  <label className={classes.remember} htmlFor="remember">
+                    <input
+                      id="remember"
+                      type="checkbox"
+                      className={classes.checkbox}
+                      checked={rememberMe}
+                      onChange={(event) => setRememberMe(event.target.checked)}
+                    />
+                    <span className={classes.rememberLabel}>
+                      {t("Remember for 30 days")}
+                    </span>
+                  </label>
+
+                  <Link className={classes.forgotLink} to={forgotPasswordHref}>
+                    {t("Forgot password?")}
+                  </Link>
+                </div>
+              )}
 
               {authError && (
                 <div className={classes.errorBanner}>{authError}</div>
@@ -697,16 +838,20 @@ export function AnimatedCharactersLoginPage({
                 className={classes.submitButton}
                 disabled={isLoading}
               >
-                {isLoading ? "Signing in..." : "Log in"}
+                {isLoading ? submitLoadingLabel : submitLabel}
               </button>
+
+              {secondaryActionHref && secondaryActionLabel && (
+                <Link className={classes.secondaryButton} to={secondaryActionHref}>
+                  {secondaryActionLabel}
+                </Link>
+              )}
             </form>
           ) : (
             <div className={classes.enforceSsoCard}>
-              <p className={classes.enforceSsoTitle}>
-                Single sign-on is required
-              </p>
+              <p className={classes.enforceSsoTitle}>{t("Single sign-on is required")}</p>
               <p className={classes.enforceSsoText}>
-                Use one of the available identity providers below to continue.
+                {t("Use one of the available identity providers below to continue.")}
               </p>
             </div>
           )}

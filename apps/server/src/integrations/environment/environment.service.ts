@@ -210,6 +210,13 @@ export class EnvironmentService {
     return disable === 'true';
   }
 
+  isPublicSignupEnabled(): boolean {
+    const enabled = this.configService
+      .get<string>('ENABLE_PUBLIC_SIGNUP', 'true')
+      .toLowerCase();
+    return enabled === 'true';
+  }
+
   getPostHogHost(): string {
     return this.configService.get<string>('POSTHOG_HOST');
   }

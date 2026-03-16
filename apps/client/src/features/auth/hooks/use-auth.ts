@@ -4,6 +4,7 @@ import {
   login,
   logout,
   passwordReset,
+  register,
   setupWorkspace,
   verifyUserToken,
 } from "@/features/auth/services/auth-service";
@@ -14,6 +15,7 @@ import {
   IForgotPassword,
   ILogin,
   IPasswordReset,
+  IRegister,
   ISetupWorkspace,
   IVerifyUserToken,
 } from "@/features/auth/types/auth.types";
@@ -67,6 +69,39 @@ export default function useAuth() {
       return {
         ok: false,
         error: message || t("Login failed"),
+      };
+    }
+  };
+
+  const translateErrorMessage = (
+    err: any,
+    fallback: string,
+  ): string => {
+    const message = err?.response?.data?.message;
+    if (typeof message === "string" && message.length > 0) {
+      return t(message);
+    }
+
+    return fallback;
+  };
+
+  const handlePublicSignup = async (data: IRegister) => {
+    setIsLoading(true);
+
+    try {
+      await register(data);
+      setIsLoading(false);
+      navigate(`${APP_ROUTE.AUTH.LOGIN}?registered=1`);
+      return { ok: true };
+    } catch (err) {
+      setIsLoading(false);
+
+      return {
+        ok: false,
+        error: translateErrorMessage(
+          err,
+          t("Unable to sign up right now. Please try again."),
+        ),
       };
     }
   };
@@ -209,6 +244,7 @@ export default function useAuth() {
 
   return {
     signIn: handleSignIn,
+    publicSignup: handlePublicSignup,
     invitationSignup: handleInvitationSignUp,
     setupWorkspace: handleSetupWorkspace,
     forgotPassword: handleForgotPassword,

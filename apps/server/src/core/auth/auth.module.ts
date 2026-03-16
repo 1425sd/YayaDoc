@@ -5,11 +5,17 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { WorkspaceModule } from '../workspace/workspace.module';
 import { SignupService } from './services/signup.service';
 import { TokenModule } from './token.module';
+import { PublicSignupRateLimitService } from './services/public-signup-rate-limit.service';
 
 @Module({
   imports: [TokenModule, WorkspaceModule],
   controllers: [AuthController],
-  providers: [AuthService, SignupService, JwtStrategy],
+  providers: [
+    AuthService,
+    SignupService,
+    JwtStrategy,
+    PublicSignupRateLimitService,
+  ],
   exports: [SignupService],
 })
 export class AuthModule {}

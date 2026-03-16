@@ -111,6 +111,7 @@ export class WorkspaceService {
 
     return {
       ...rest,
+      enablePublicSignup: this.environmentService.isPublicSignupEnabled(),
       hasLicenseKey: true,
     };
   }

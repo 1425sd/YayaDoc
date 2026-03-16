@@ -44,24 +44,26 @@
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 12px;
-  font-size: 1.125rem;
-  font-weight: 600;
+  gap: 16px;
 }
 
-.brandBadge {
-  width: 32px;
-  height: 32px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: light-dark(rgba(43, 122, 241, 0.12), rgba(255, 255, 255, 0.12));
-  backdrop-filter: blur(10px);
+.brandIcon {
+  display: block;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  object-fit: contain;
+  border-radius: 16px;
+  box-shadow: 0 18px 32px
+    light-dark(rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.24));
 }
 
-.brandName {
-  letter-spacing: -0.02em;
+.brandWordmark {
+  display: block;
+  width: auto;
+  height: 42px;
+  max-width: min(100%, 320px);
+  object-fit: contain;
 }
 
 .charactersWrap {
@@ -259,18 +261,18 @@
 
 .mobileBrand {
   display: none;
-  align-items: center;
   justify-content: center;
-  gap: 12px;
   margin-bottom: 48px;
-  font-size: 1.125rem;
-  font-weight: 600;
-  color: light-dark(#0f172a, #f8fafc);
 }
 
-.mobileBrand .brandBadge {
-  background: light-dark(rgba(108, 63, 245, 0.1), rgba(108, 63, 245, 0.2));
-  color: #6c3ff5;
+.mobileBrand .brandIcon {
+  width: 48px;
+  height: 48px;
+}
+
+.mobileBrand .brandWordmark {
+  height: 36px;
+  max-width: min(100%, 260px);
 }
 
 .header {
@@ -453,6 +455,34 @@
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
+}
+
+.secondaryButton {
+  width: 100%;
+  min-height: 48px;
+  border-radius: 14px;
+  border: 1px solid
+    light-dark(rgba(148, 163, 184, 0.42), rgba(71, 85, 105, 0.78));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: light-dark(rgba(255, 255, 255, 0.88), rgba(15, 23, 42, 0.72));
+  color: light-dark(#0f172a, #f8fafc);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    background 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.secondaryButton:hover {
+  background: light-dark(rgba(241, 245, 249, 1), rgba(30, 41, 59, 0.78));
+  border-color: rgba(108, 63, 245, 0.34);
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
 }
 
 .socialLogin {

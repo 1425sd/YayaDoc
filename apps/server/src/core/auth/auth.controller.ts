@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   HttpCode,
   HttpStatus,
   Inject,
   Post,
+  Req,
   Res,
   UseGuards,
   Logger,
@@ -14,6 +16,7 @@ import { AuthService } from './services/auth.service';
 import { SetupGuard } from './guards/setup.guard';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { CreateAdminUserDto } from './dto/create-admin-user.dto';
+import { CreateUserDto } from './dto/create-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
@@ -30,6 +33,8 @@ import {
   AUDIT_SERVICE,
   IAuditService,
 } from '../../integrations/audit/audit.service';
+import { FastifyRequest } from 'fastify';
+import { PublicSignupRateLimitService } from './services/public-signup-rate-limit.service';
 
 @Controller('auth')
 export class AuthController {
@@ -39,6 +44,7 @@ export class AuthController {
     private authService: AuthService,
     private environmentService: EnvironmentService,
     private moduleRef: ModuleRef,
+    private publicSignupRateLimitService: PublicSignupRateLimitService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -92,6 +98,26 @@ export class AuthController {
 
     const authToken = await this.authService.login(loginInput, workspace.id);
     this.setAuthCookie(res, authToken);
+  }
+
+  @HttpCode(HttpStatus.OK)
+  @Post('register')
+  async register(
+    @Req() req: FastifyRequest,
+    @Body() createUserDto: CreateUserDto,
+    @AuthWorkspace() workspace: Workspace,
+  ) {
+    if (!this.environmentService.isPublicSignupEnabled()) {
+      throw new ForbiddenException('Public signup is currently disabled.');
+    }
+
+    validateSsoEnforcement(workspace);
+    this.publicSignupRateLimitService.check(
+      workspace.id,
+      req.ip ?? 'unknown',
+    );
+
+    return this.authService.publicRegister(createUserDto, workspace);
   }
 
   @UseGuards(SetupGuard)

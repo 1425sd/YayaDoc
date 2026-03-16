@@ -16,6 +16,7 @@ import PageRedirect from "@/pages/page/page-redirect.tsx";
 import Layout from "@/components/layouts/global/layout.tsx";
 import InviteSignup from "@/pages/auth/invite-signup.tsx";
 import ForgotPassword from "@/pages/auth/forgot-password.tsx";
+import RegisterPage from "@/pages/auth/register.tsx";
 import PasswordReset from "./pages/auth/password-reset";
 import Billing from "@/ee/billing/pages/billing.tsx";
 import CloudLogin from "@/ee/pages/cloud-login.tsx";
@@ -53,6 +54,7 @@ export default function App() {
       <Routes>
         <Route index element={<Navigate to="/home" />} />
         <Route path={"/login"} element={<LoginPage />} />
+        <Route path={"/register"} element={<RegisterPage />} />
         <Route path={"/invites/:invitationId"} element={<InviteSignup />} />
         <Route path={"/forgot-password"} element={<ForgotPassword />} />
         <Route path={"/password-reset"} element={<PasswordReset />} />

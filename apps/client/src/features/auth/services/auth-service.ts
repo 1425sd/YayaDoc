@@ -6,6 +6,7 @@ import {
   ILogin,
   ILoginResponse,
   IPasswordReset,
+  IRegister,
   ISetupWorkspace,
   IVerifyUserToken,
 } from "@/features/auth/types/auth.types";
@@ -18,6 +19,10 @@ export async function login(data: ILogin): Promise<ILoginResponse> {
 
 export async function logout(): Promise<void> {
   await api.post<void>("/auth/logout");
+}
+
+export async function register(data: IRegister): Promise<void> {
+  await api.post<void>("/auth/register", data);
 }
 
 export async function changePassword(
@@ -51,4 +56,3 @@ export async function getCollabToken(): Promise<ICollabToken> {
   const req = await api.post<ICollabToken>("/auth/collab-token");
   return req.data;
 }
-

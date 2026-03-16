@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Inject,
   Injectable,
   NotFoundException,
@@ -17,7 +18,10 @@ import {
   isUserDisabled,
   nanoIdGen,
 } from '../../../common/helpers';
-import { throwIfEmailNotVerified } from '../auth.util';
+import {
+  throwIfEmailNotVerified,
+  validateAllowedEmail,
+} from '../auth.util';
 import { ChangePasswordDto } from '../dto/change-password.dto';
 import { MailService } from '../../../integrations/mail/mail.service';
 import ChangePasswordEmail from '@docmost/transactional/emails/change-password-email';
@@ -96,6 +100,17 @@ export class AuthService {
   async register(createUserDto: CreateUserDto, workspaceId: string) {
     const user = await this.signupService.signup(createUserDto, workspaceId);
     return this.tokenService.generateAccessToken(user);
+  }
+
+  async publicRegister(createUserDto: CreateUserDto, workspace: Workspace) {
+    if (!this.environmentService.isPublicSignupEnabled()) {
+      throw new ForbiddenException('Public signup is currently disabled.');
+    }
+
+    validateAllowedEmail(createUserDto.email, workspace);
+    await this.signupService.signup(createUserDto, workspace.id);
+
+    return { success: true };
   }
 
   async setup(createAdminUserDto: CreateAdminUserDto) {
