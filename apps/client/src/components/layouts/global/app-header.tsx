@@ -1,4 +1,4 @@
-import { Badge, Group, Text, Tooltip } from "@mantine/core";
+import { Badge, Group, Tooltip } from "@mantine/core";
 import classes from "./app-header.module.css";
 import React from "react";
 import TopMenu from "@/components/layouts/global/top-menu.tsx";
@@ -73,15 +73,17 @@ export function AppHeader() {
             </>
           )}
 
-          <Text
-            size="lg"
-            fw={600}
-            style={{ cursor: "pointer", userSelect: "none" }}
-            component={Link}
+          <Link
             to="/home"
+            className={classes.brandLink}
+            aria-label={t("Home")}
           >
-            Docmost
-          </Text>
+            <img
+              src="/docmost-logo.svg"
+              alt="YayaDoc"
+              className={classes.brandLogo}
+            />
+          </Link>
 
           <Group ml={50} gap={5} className={classes.links} visibleFrom="sm">
             {items}

@@ -21,3 +21,17 @@
         background-color: light-dark(var(--mantine-color-gray-0), var(--mantine-color-dark-6));
     }
 }
+
+.brandLink {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    text-decoration: none;
+    user-select: none;
+}
+
+.brandLogo {
+    display: block;
+    width: auto;
+    height: 26px;
+}

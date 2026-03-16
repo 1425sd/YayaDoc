@@ -126,7 +126,9 @@ export class ShareController {
 
     await this.pageAccessService.validateCanView(page, user);
 
-    return this.shareService.getShareForPage(page.id, workspace.id);
+    return (
+      (await this.shareService.getShareForPage(page.id, workspace.id)) ?? null
+    );
   }
 
   @HttpCode(HttpStatus.OK)

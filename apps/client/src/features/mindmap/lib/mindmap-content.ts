@@ -17,7 +17,12 @@ export type MindMapFullData = {
     template: string;
     config: Record<string, any>;
   };
-  view: Record<string, any>;
+  view:
+    | {
+        transform: Record<string, any>;
+        state: Record<string, any>;
+      }
+    | null;
 };
 
 export type MindMapNode = {
@@ -121,7 +126,7 @@ export function createEmptyMindMapData(): MindMapFullData {
       template: "default",
       config: {},
     },
-    view: {},
+    view: null,
   };
 }
 
@@ -139,6 +144,19 @@ function isValidMindMapRoot(root: any): root is MindMapFullData["root"] {
       root.data &&
       typeof root.data === "object" &&
       typeof root.data.text === "string",
+  );
+}
+
+function isValidMindMapView(
+  view: any,
+): view is NonNullable<MindMapFullData["view"]> {
+  return Boolean(
+    view &&
+      typeof view === "object" &&
+      view.transform &&
+      typeof view.transform === "object" &&
+      view.state &&
+      typeof view.state === "object",
   );
 }
 
@@ -202,8 +220,7 @@ export function getMindMapData(content: any): MindMapFullData {
           ? data.theme.config
           : fallback.theme.config,
     },
-    view:
-      data.view && typeof data.view === "object" ? data.view : fallback.view,
+    view: isValidMindMapView(data.view) ? data.view : fallback.view,
   };
 }
 

@@ -52,7 +52,7 @@ export default function McpSettings() {
           color="blue"
         >
           {t(
-            "MCP is only available in the Docmost enterprise edition. Contact sales@docmost.com.",
+            "MCP is only available in the YayaDoc enterprise edition. Contact sales@docmost.com.",
           )}
         </Alert>
       )}

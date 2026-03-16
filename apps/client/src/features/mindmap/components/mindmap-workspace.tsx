@@ -360,6 +360,10 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
       try {
         await waitForContainerReady(container, () => cancelled);
         const MindMap = await loadMindMapConstructor();
+        const initialViewData =
+          mindMapData.view?.state && mindMapData.view?.transform
+            ? mindMapData.view
+            : null;
 
         if (cancelled) {
           return;
@@ -371,10 +375,10 @@ export function MindMapWorkspace({ page, editable }: MindMapWorkspaceProps) {
           layout: mindMapData.layout,
           theme: mindMapData.theme.template,
           themeConfig: mindMapData.theme.config,
-          viewData: mindMapData.view,
+          viewData: initialViewData,
           readonly: !editable,
           mousewheelAction: "zoom",
-          fit: !mindMapData.view || Object.keys(mindMapData.view).length === 0,
+          fit: !initialViewData,
         } as any);
 
         if (cancelled) {
