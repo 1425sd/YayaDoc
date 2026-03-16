@@ -21,6 +21,26 @@ const TAB_CHAR = "\u00A0\u00A0";
 export const CustomCodeBlock = CodeBlock.extend<CodeBlockLowlightOptions>({
   selectable: true,
 
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      theme: {
+        default: "graphite",
+        parseHTML: (element) =>
+          element.getAttribute("data-code-theme") || "graphite",
+        renderHTML: (attributes) => {
+          if (!attributes.theme) {
+            return {};
+          }
+
+          return {
+            "data-code-theme": attributes.theme,
+          };
+        },
+      },
+    };
+  },
+
   addOptions() {
     return {
       ...this.parent?.(),

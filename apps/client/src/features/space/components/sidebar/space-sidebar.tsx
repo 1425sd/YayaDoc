@@ -7,14 +7,15 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 import {
+  IconAdjustmentsHorizontal,
   IconArrowDown,
   IconDots,
   IconFileExport,
-  IconHome,
-  IconPlus,
-  IconSearch,
-  IconSettings,
+  IconFilePlus,
+  IconFolderPlus,
+  IconLayoutDashboard,
   IconTrash,
+  IconZoomScan,
 } from "@tabler/icons-react";
 import classes from "./space-sidebar.module.css";
 import React from "react";
@@ -64,6 +65,14 @@ export function SpaceSidebar() {
     tree?.create({ parentId: null, type: "internal", index: 0 });
   }
 
+  const menuCopy = {
+    overview: "查看空间总览与动态",
+    search: "全局检索页面与内容",
+    settings: "管理成员、权限与配置",
+    create: "创建看板/文档/思维导图",
+    newPage: "快速新建一页空白文档",
+  };
+
   return (
     <>
       <div className={classes.navbar}>
@@ -95,12 +104,18 @@ export function SpaceSidebar() {
               )}
             >
               <div className={classes.menuItemInner}>
-                <IconHome
-                  size={18}
-                  className={classes.menuItemIcon}
-                  stroke={2}
+                <IconLayoutDashboard
+                  size={19}
+                  className={clsx(
+                    classes.menuItemIcon,
+                    classes.menuItemIconOverview,
+                  )}
+                  stroke={2.15}
                 />
-                <span>{t("Overview")}</span>
+                <div className={classes.menuText}>
+                  <span className={classes.menuLabel}>{t("Overview")}</span>
+                  <span className={classes.menuDesc}>{menuCopy.overview}</span>
+                </div>
               </div>
             </UnstyledButton>
 
@@ -109,23 +124,36 @@ export function SpaceSidebar() {
               onClick={searchSpotlight.open}
             >
               <div className={classes.menuItemInner}>
-                <IconSearch
-                  size={18}
-                  className={classes.menuItemIcon}
-                  stroke={2}
+                <IconZoomScan
+                  size={19}
+                  className={clsx(
+                    classes.menuItemIcon,
+                    classes.menuItemIconSearch,
+                  )}
+                  stroke={2.15}
                 />
-                <span>{t("Search")}</span>
+                <div className={classes.menuText}>
+                  <span className={classes.menuLabel}>{t("Search")}</span>
+                  <span className={classes.menuDesc}>{menuCopy.search}</span>
+                </div>
+                <span className={classes.menuMeta}>Ctrl K</span>
               </div>
             </UnstyledButton>
 
             <UnstyledButton className={classes.menu} onClick={openSettings}>
               <div className={classes.menuItemInner}>
-                <IconSettings
-                  size={18}
-                  className={classes.menuItemIcon}
-                  stroke={2}
+                <IconAdjustmentsHorizontal
+                  size={19}
+                  className={clsx(
+                    classes.menuItemIcon,
+                    classes.menuItemIconSettings,
+                  )}
+                  stroke={2.15}
                 />
-                <span>{t("Space settings")}</span>
+                <div className={classes.menuText}>
+                  <span className={classes.menuLabel}>{t("Space settings")}</span>
+                  <span className={classes.menuDesc}>{menuCopy.settings}</span>
+                </div>
               </div>
             </UnstyledButton>
 
@@ -139,12 +167,19 @@ export function SpaceSidebar() {
                 className={classes.menu}
               >
                 <div className={classes.menuItemInner}>
-                  <IconPlus
-                    size={18}
-                    className={classes.menuItemIcon}
-                    stroke={2}
+                  <IconFolderPlus
+                    size={19}
+                    className={clsx(
+                      classes.menuItemIcon,
+                      classes.menuItemIconCreate,
+                    )}
+                    stroke={2.15}
                   />
-                  <span>{t("Create")}</span>
+                  <div className={classes.menuText}>
+                    <span className={classes.menuLabel}>{t("Create")}</span>
+                    <span className={classes.menuDesc}>{menuCopy.create}</span>
+                  </div>
+                  <span className={classes.menuMeta}>NEW</span>
                 </div>
               </UnstyledButton>
             )}
@@ -163,12 +198,19 @@ export function SpaceSidebar() {
                 }}
               >
                 <div className={classes.menuItemInner}>
-                  <IconPlus
-                    size={18}
-                    className={classes.menuItemIcon}
-                    stroke={2}
+                  <IconFilePlus
+                    size={19}
+                    className={clsx(
+                      classes.menuItemIcon,
+                      classes.menuItemIconNewPage,
+                    )}
+                    stroke={2.15}
                   />
-                  <span>{t("New page")}</span>
+                  <div className={classes.menuText}>
+                    <span className={classes.menuLabel}>{t("New page")}</span>
+                    <span className={classes.menuDesc}>{menuCopy.newPage}</span>
+                  </div>
+                  <span className={classes.menuMeta}>+1</span>
                 </div>
               </UnstyledButton>
             )}
@@ -195,7 +237,7 @@ export function SpaceSidebar() {
                     onClick={handleCreatePage}
                     aria-label={t("Create page")}
                   >
-                    <IconPlus />
+                    <IconFilePlus />
                   </ActionIcon>
                 </Tooltip>
               </Group>
@@ -273,7 +315,7 @@ function SpaceMenu({ spaceId, onSpaceSettings }: SpaceMenuProps) {
 
           <Menu.Item
             onClick={onSpaceSettings}
-            leftSection={<IconSettings size={16} />}
+            leftSection={<IconAdjustmentsHorizontal size={16} />}
           >
             {t("Space settings")}
           </Menu.Item>

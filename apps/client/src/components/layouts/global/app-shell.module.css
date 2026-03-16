@@ -13,13 +13,21 @@
   border-bottom-color: rgba(148, 163, 184, 0.16);
 }
 
-.navbar, .aside {
-  border-radius: rem(28px);
+.navbar,
+.aside {
   overflow: hidden;
 
   @media (max-width: $mantine-breakpoint-sm) {
     width: 350px;
   }
+}
+
+.navbar {
+  border-radius: 0;
+}
+
+.aside {
+  border-radius: rem(28px);
 }
 
 .aside {
@@ -78,4 +86,3 @@
     background: light-dark(var(--mantine-color-gray-4), var(--mantine-color-dark-5))
   }
 }
-
