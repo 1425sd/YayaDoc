@@ -13,10 +13,10 @@ import { useTranslation } from "react-i18next";
 import { buildSharedPageUrl } from "@/features/page/page.utils.ts";
 import clsx from "clsx";
 import {
-  IconChevronDown,
   IconChevronRight,
   IconFileDescription,
-  IconPointFilled,
+  IconFolder,
+  IconFolderOpen,
 } from "@tabler/icons-react";
 import { ActionIcon, Box } from "@mantine/core";
 import { extractPageSlugId } from "@/lib";
@@ -25,6 +25,7 @@ import classes from "@/features/page/tree/styles/tree.module.css";
 import styles from "./share.module.css";
 import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import EmojiPicker from "@/components/ui/emoji-picker.tsx";
+import { motion } from "motion/react";
 
 interface SharedTree {
   sharedPageTree: ISharedPageTree;
@@ -100,7 +101,7 @@ export default function SharedTree({ sharedPageTree }: SharedTree) {
           disableMultiSelection={true}
           className={classes.tree}
           rowClassName={classes.row}
-          rowHeight={30}
+          rowHeight={40}
           overscanCount={10}
           dndRootElement={rootElement.current}
           onToggle={() => {
@@ -124,12 +125,38 @@ function Node({ node, style, tree }: NodeRendererProps<any>) {
   const { shareId } = useParams();
   const { t } = useTranslation();
   const [, setMobileSidebarState] = useAtom(mobileSidebarAtom);
+  const hasChildren =
+    node.isInternal && (node.children.length > 0 || node.data.hasChildren);
 
   const pageUrl = buildSharedPageUrl({
     shareId: shareId,
     pageSlugId: node.data.slugId,
     pageTitle: node.data.name,
   });
+
+  const pageIcon = node.data.icon ? (
+    <span className={clsx(classes.itemIcon, classes.itemEmoji)}>
+      {node.data.icon}
+    </span>
+  ) : (
+    <span
+      className={clsx(
+        classes.itemIcon,
+        hasChildren ? classes.itemIconFolder : classes.itemIconFile,
+        hasChildren && node.isOpen && classes.itemIconFolderOpen,
+      )}
+    >
+      {hasChildren ? (
+        node.isOpen ? (
+          <IconFolderOpen size={18} stroke={1.9} />
+        ) : (
+          <IconFolder size={18} stroke={1.9} />
+        )
+      ) : (
+        <IconFileDescription size={18} stroke={1.8} />
+      )}
+    </span>
+  );
 
   return (
     <>
@@ -143,18 +170,17 @@ function Node({ node, style, tree }: NodeRendererProps<any>) {
         }}
       >
         <PageArrow node={node} />
-        <div style={{ marginRight: "4px" }}>
+        <div className={classes.iconWrap}>
           <EmojiPicker
             onEmojiSelect={() => {}}
-            icon={
-              node.data.icon ? (
-                node.data.icon
-              ) : (
-                <IconFileDescription size="18" />
-              )
-            }
+            icon={pageIcon}
             readOnly={true}
             removeEmojiAction={() => {}}
+            actionIconProps={{
+              size: "lg",
+              variant: "transparent",
+              c: "gray",
+            }}
           />
         </div>
         <span className={classes.text}>{node.data.name || t("untitled")}</span>
@@ -168,28 +194,32 @@ interface PageArrowProps {
 }
 
 function PageArrow({ node }: PageArrowProps) {
+  const hasChildren =
+    node.isInternal && (node.children.length > 0 || node.data.hasChildren);
+
+  if (!hasChildren) {
+    return <span className={classes.arrowPlaceholder} aria-hidden="true" />;
+  }
+
   return (
     <ActionIcon
-      size={20}
-      variant="subtle"
+      size={28}
+      variant="transparent"
       c="gray"
+      className={classes.arrowButton}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
         node.toggle();
       }}
     >
-      {node.isInternal ? (
-        node.children && (node.children.length > 0 || node.data.hasChildren) ? (
-          node.isOpen ? (
-            <IconChevronDown stroke={2} size={16} />
-          ) : (
-            <IconChevronRight stroke={2} size={16} />
-          )
-        ) : (
-          <IconPointFilled size={4} />
-        )
-      ) : null}
+      <motion.span
+        className={classes.arrowIcon}
+        animate={{ rotate: node.isOpen ? 90 : 0 }}
+        transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+      >
+        <IconChevronRight stroke={2.2} size={16} />
+      </motion.span>
     </ActionIcon>
   );
 }

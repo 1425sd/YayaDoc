@@ -19,15 +19,15 @@ import classes from "@/features/page/tree/styles/tree.module.css";
 import { ActionIcon, Box, Menu, rem, Text } from "@mantine/core";
 import {
   IconArrowRight,
-  IconChevronDown,
   IconChevronRight,
   IconCopy,
   IconDotsVertical,
   IconFileDescription,
   IconFileExport,
+  IconFolder,
+  IconFolderOpen,
   IconLink,
   IconPlus,
-  IconPointFilled,
   IconTrash,
 } from "@tabler/icons-react";
 import {
@@ -69,6 +69,7 @@ import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sideb
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import CopyPageModal from "../../components/copy-page-modal.tsx";
 import { duplicatePage } from "../../services/page-service.ts";
+import { motion } from "motion/react";
 
 interface SpaceTreeProps {
   spaceId: string;
@@ -267,7 +268,7 @@ export default function SpaceTree({ spaceId, readOnly }: SpaceTreeProps) {
           disableMultiSelection={true}
           className={classes.tree}
           rowClassName={classes.row}
-          rowHeight={30}
+          rowHeight={40}
           overscanCount={10}
           dndRootElement={rootElement.current}
           onToggle={() => {
@@ -393,6 +394,31 @@ function Node({ node, style, dragHandle, tree }: NodeRendererProps<any>) {
   }
 
   const pageUrl = buildPageUrl(spaceSlug, node.data.slugId, node.data.name);
+  const hasChildren =
+    node.isInternal && (node.children.length > 0 || node.data.hasChildren);
+  const pageIcon = node.data.icon ? (
+    <span className={clsx(classes.itemIcon, classes.itemEmoji)}>
+      {node.data.icon}
+    </span>
+  ) : (
+    <span
+      className={clsx(
+        classes.itemIcon,
+        hasChildren ? classes.itemIconFolder : classes.itemIconFile,
+        hasChildren && node.isOpen && classes.itemIconFolderOpen,
+      )}
+    >
+      {hasChildren ? (
+        node.isOpen ? (
+          <IconFolderOpen size={18} stroke={1.9} />
+        ) : (
+          <IconFolder size={18} stroke={1.9} />
+        )
+      ) : (
+        <IconFileDescription size={18} stroke={1.8} />
+      )}
+    </span>
+  );
 
   return (
     <>
@@ -413,20 +439,19 @@ function Node({ node, style, dragHandle, tree }: NodeRendererProps<any>) {
       >
         <PageArrow node={node} onExpandTree={() => handleLoadChildren(node)} />
 
-        <div onClick={handleEmojiIconClick} style={{ marginRight: "4px" }}>
+        <div className={classes.iconWrap} onClick={handleEmojiIconClick}>
           <EmojiPicker
             onEmojiSelect={handleEmojiSelect}
-            icon={
-              node.data.icon ? (
-                node.data.icon
-              ) : (
-                <IconFileDescription size="18" />
-              )
-            }
+            icon={pageIcon}
             readOnly={
               tree.props.disableEdit === true || node.data.canEdit === false
             }
             removeEmojiAction={handleRemoveEmoji}
+            actionIconProps={{
+              size: "lg",
+              variant: "transparent",
+              c: "gray",
+            }}
           />
         </div>
 
@@ -472,6 +497,7 @@ function CreateNode({ node, treeApi, onExpandTree }: CreateNodeProps) {
     <ActionIcon
       variant="transparent"
       c="gray"
+      className={classes.actionControl}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -584,6 +610,7 @@ function NodeMenu({ node, treeApi, spaceId }: NodeMenuProps) {
           <ActionIcon
             variant="transparent"
             c="gray"
+            className={classes.actionControl}
             onClick={(e) => {
               e.preventDefault();
               e.stopPropagation();
@@ -705,33 +732,40 @@ interface PageArrowProps {
 function PageArrow({ node, onExpandTree }: PageArrowProps) {
   useEffect(() => {
     if (node.isOpen) {
-      onExpandTree();
+      onExpandTree?.();
     }
   }, []);
 
+  const hasChildren =
+    node.isInternal && (node.children.length > 0 || node.data.hasChildren);
+
+  if (!hasChildren) {
+    return <span className={classes.arrowPlaceholder} aria-hidden="true" />;
+  }
+
   return (
     <ActionIcon
-      size={20}
-      variant="subtle"
+      size={28}
+      variant="transparent"
       c="gray"
+      className={classes.arrowButton}
       onClick={(e) => {
         e.preventDefault();
         e.stopPropagation();
+        const willOpen = !node.isOpen;
         node.toggle();
-        onExpandTree();
+        if (willOpen) {
+          onExpandTree?.();
+        }
       }}
     >
-      {node.isInternal ? (
-        node.children && (node.children.length > 0 || node.data.hasChildren) ? (
-          node.isOpen ? (
-            <IconChevronDown stroke={2} size={18} />
-          ) : (
-            <IconChevronRight stroke={2} size={18} />
-          )
-        ) : (
-          <IconPointFilled size={8} />
-        )
-      ) : null}
+      <motion.span
+        className={classes.arrowIcon}
+        animate={{ rotate: node.isOpen ? 90 : 0 }}
+        transition={{ type: "spring", bounce: 0, duration: 0.3 }}
+      >
+        <IconChevronRight stroke={2.2} size={16} />
+      </motion.span>
     </ActionIcon>
   );
 }
