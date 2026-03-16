@@ -39,6 +39,9 @@ import WorkspaceApiKeys from "@/ee/api-key/pages/workspace-api-keys";
 import AiSettings from "@/ee/ai/pages/ai-settings.tsx";
 import AuditLogs from "@/ee/audit/pages/audit-logs.tsx";
 import VerifyEmail from "@/ee/pages/verify-email.tsx";
+import BoardPage from "@/pages/page/board-page.tsx";
+import BoardCreatePage from "@/features/board/components/board-create-page.tsx";
+import MindMapPage from "@/pages/page/mindmap-page.tsx";
 
 export default function App() {
   const { t } = useTranslation();
@@ -83,11 +86,11 @@ export default function App() {
           <Route path={"/home"} element={<Home />} />
           <Route path={"/spaces"} element={<SpacesPage />} />
           <Route path={"/s/:spaceSlug"} element={<SpaceHome />} />
+          <Route path={"/s/:spaceSlug/new"} element={<BoardCreatePage />} />
           <Route path={"/s/:spaceSlug/trash"} element={<SpaceTrash />} />
-          <Route
-            path={"/s/:spaceSlug/p/:pageSlug"}
-            element={<Page />}
-          />
+          <Route path={"/s/:spaceSlug/b/:pageSlug"} element={<BoardPage />} />
+          <Route path={"/s/:spaceSlug/m/:pageSlug"} element={<MindMapPage />} />
+          <Route path={"/s/:spaceSlug/p/:pageSlug"} element={<Page />} />
 
           <Route path={"/settings"}>
             <Route path={"account/profile"} element={<AccountSettings />} />

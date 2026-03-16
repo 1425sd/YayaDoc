@@ -53,6 +53,7 @@
     "react-i18next": "^15.0.1",
     "react-router-dom": "^7.12.0",
     "semver": "^7.7.3",
+    "simple-mind-map": "0.14.0-fix.1",
     "socket.io-client": "^4.8.3",
     "tiptap-extension-global-drag-handle": "^0.1.18",
     "zod": "^4.3.6"

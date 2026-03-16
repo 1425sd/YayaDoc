@@ -39,6 +39,7 @@ import ExportModal from "@/components/common/export-modal";
 import { mobileSidebarAtom } from "@/components/layouts/global/hooks/atoms/sidebar-atom.ts";
 import { useToggleSidebar } from "@/components/layouts/global/hooks/hooks/use-toggle-sidebar.ts";
 import { searchSpotlight } from "@/features/search/constants";
+import { buildCreatePageUrl } from "@/features/page/page.utils.ts";
 
 export function SpaceSidebar() {
   const { t } = useTranslation();
@@ -127,6 +128,26 @@ export function SpaceSidebar() {
                 <span>{t("Space settings")}</span>
               </div>
             </UnstyledButton>
+
+            {spaceAbility.can(
+              SpaceCaslAction.Manage,
+              SpaceCaslSubject.Page,
+            ) && (
+              <UnstyledButton
+                component={Link}
+                to={buildCreatePageUrl(spaceSlug)}
+                className={classes.menu}
+              >
+                <div className={classes.menuItemInner}>
+                  <IconPlus
+                    size={18}
+                    className={classes.menuItemIcon}
+                    stroke={2}
+                  />
+                  <span>{t("Create")}</span>
+                </div>
+              </UnstyledButton>
+            )}
 
             {spaceAbility.can(
               SpaceCaslAction.Manage,

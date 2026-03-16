@@ -26,7 +26,10 @@ import { v7 as uuid7 } from "uuid";
 import { isCellSelection, isTextSelected } from "@docmost/editor-ext";
 import { LinkSelector } from "@/features/editor/components/bubble-menu/link-selector.tsx";
 import { useTranslation } from "react-i18next";
-import { showAiMenuAtom } from "@/features/editor/atoms/editor-atoms";
+import {
+  showAiMenuAtom,
+  showManualBubbleMenuAtom,
+} from "@/features/editor/atoms/editor-atoms";
 import { workspaceAtom } from "@/features/user/atoms/current-user-atom";
 
 export interface BubbleMenuItem {
@@ -43,6 +46,9 @@ type EditorBubbleMenuProps = Omit<BubbleMenuProps, "children" | "editor"> & {
 export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
   const { t } = useTranslation();
   const [showAiMenu, setShowAiMenu] = useAtom(showAiMenuAtom);
+  const [showManualBubbleMenu, setShowManualBubbleMenu] = useAtom(
+    showManualBubbleMenuAtom,
+  );
   const [showCommentPopup, setShowCommentPopup] = useAtom(showCommentPopupAtom);
   const workspace = useAtomValue(workspaceAtom);
   const isGenerativeAiEnabled = workspace?.settings?.ai?.generative === true;
@@ -57,6 +63,39 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
   useEffect(() => {
     showAiMenuRef.current = showAiMenu;
   }, [showAiMenu]);
+
+  useEffect(() => {
+    if (showAiMenu || showCommentPopup) {
+      setShowManualBubbleMenu(false);
+    }
+  }, [setShowManualBubbleMenu, showAiMenu, showCommentPopup]);
+
+  useEffect(() => {
+    if (!props.editor) {
+      return;
+    }
+
+    const syncManualBubbleState = () => {
+      const { selection } = props.editor.state;
+
+      if (
+        selection.empty ||
+        isNodeSelection(selection) ||
+        isCellSelection(selection) ||
+        !isTextSelected(props.editor)
+      ) {
+        setShowManualBubbleMenu(false);
+      }
+    };
+
+    props.editor.on("selectionUpdate", syncManualBubbleState);
+    props.editor.on("blur", syncManualBubbleState);
+
+    return () => {
+      props.editor.off("selectionUpdate", syncManualBubbleState);
+      props.editor.off("blur", syncManualBubbleState);
+    };
+  }, [props.editor, setShowManualBubbleMenu]);
 
   const editorState = useEditorState({
     editor: props.editor,
@@ -115,6 +154,7 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
     command: () => {
       const commentId = uuid7();
 
+      setShowManualBubbleMenu(false);
       props.editor.chain().focus().setCommentDecoration().run();
       setDraftCommentId(commentId);
       setShowCommentPopup(true);
@@ -130,6 +170,7 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
 
       if (
         !editor.isEditable ||
+        !showManualBubbleMenu ||
         editor.isActive("image") ||
         empty ||
         isNodeSelection(selection) ||
@@ -145,6 +186,7 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
       placement: "top",
       offset: 8,
       onHide: () => {
+        setShowManualBubbleMenu(false);
         setIsNodeSelectorOpen(false);
         setIsTextAlignmentOpen(false);
         setIsLinkSelectorOpen(false);
@@ -159,7 +201,7 @@ export const EditorBubbleMenu: FC<EditorBubbleMenuProps> = (props) => {
   const [isColorSelectorOpen, setIsColorSelectorOpen] = useState(false);
 
   // Hide the bubble menu immediately when AI menu is shown
-  if (showAiMenu) return;
+  if (showAiMenu) return null;
 
   return (
     <BubbleMenu

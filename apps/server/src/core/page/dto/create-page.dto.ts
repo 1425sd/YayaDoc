@@ -8,6 +8,7 @@ import {
 import { Transform } from 'class-transformer';
 
 export type ContentFormat = 'json' | 'markdown' | 'html';
+export type PageContentType = 'note' | 'board' | 'mindmap';
 
 export class CreatePageDto {
   @IsOptional()
@@ -27,6 +28,11 @@ export class CreatePageDto {
 
   @IsOptional()
   content?: string | object;
+
+  @IsOptional()
+  @Transform(({ value }) => value?.toLowerCase())
+  @IsIn(['note', 'board', 'mindmap'])
+  contentType?: PageContentType;
 
   @ValidateIf((o) => o.content !== undefined)
   @Transform(({ value }) => value?.toLowerCase() ?? 'json')

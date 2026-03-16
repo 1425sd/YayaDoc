@@ -68,6 +68,7 @@ import { searchSpotlight } from "@/features/search/constants.ts";
 import { useEditorScroll } from "./hooks/use-editor-scroll";
 import { EditorAiMenu } from "@/ee/ai/components/editor/ai-menu/ai-menu";
 import ColumnsMenu from "@/features/editor/components/columns/columns-menu.tsx";
+import { BlockHandleMenu } from "@/features/editor/components/block-handle/block-handle-menu.tsx";
 
 interface PageEditorProps {
   pageId: string;
@@ -419,6 +420,7 @@ export default function PageEditor({
             <DrawioMenu editor={editor} />
             <ColumnsMenu editor={editor} />
             <LinkMenu editor={editor} appendTo={menuContainerRef} />
+            <BlockHandleMenu editor={editor} />
           </div>
         )}
         {showCommentPopup && <CommentDialog editor={editor} pageId={pageId} />}

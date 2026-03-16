@@ -11,6 +11,9 @@ const buildPageSlug = (pageSlugId: string, pageTitle?: string): string => {
   return `${titleSlug}-${pageSlugId}`;
 };
 
+export const buildCreatePageUrl = (spaceName: string): string =>
+  `/s/${spaceName}/new`;
+
 export const buildPageUrl = (
   spaceName: string,
   pageSlugId: string,
@@ -25,6 +28,18 @@ export const buildPageUrl = (
   }
   return anchorId ? `${url}#${anchorId}` : url;
 };
+
+export const buildBoardUrl = (
+  spaceName: string,
+  pageSlugId: string,
+  pageTitle?: string,
+): string => `/s/${spaceName}/b/${buildPageSlug(pageSlugId, pageTitle)}`;
+
+export const buildMindMapUrl = (
+  spaceName: string,
+  pageSlugId: string,
+  pageTitle?: string,
+): string => `/s/${spaceName}/m/${buildPageSlug(pageSlugId, pageTitle)}`;
 
 export const buildSharedPageUrl = (opts: {
   shareId: string;

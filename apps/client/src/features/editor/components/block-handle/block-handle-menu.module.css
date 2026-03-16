@@ -1,0 +1,33 @@
+.handleWrap {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  width: 44px;
+  height: 32px;
+  padding-right: 4px;
+}
+
+.handle {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--mantine-color-gray-3);
+  border-radius: 6px;
+  background: var(--mantine-color-body);
+  color: var(--mantine-color-gray-7);
+  cursor: pointer;
+  z-index: 35;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.handle:hover {
+  background: var(--mantine-color-gray-0);
+  color: var(--mantine-color-dark-8);
+}
+
+.menuLabel {
+  font-weight: 600;
+}

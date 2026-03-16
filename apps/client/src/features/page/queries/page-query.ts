@@ -110,15 +110,7 @@ export function useUpdatePageMutation() {
   return useMutation<IPage, Error, Partial<IPageInput>>({
     mutationFn: (data) => updatePage(data),
     onSuccess: (data) => {
-      updatePage(data);
-
-      invalidateOnUpdatePage(
-        data.spaceId,
-        data.parentPageId,
-        data.id,
-        data.title,
-        data.icon,
-      );
+      updatePageData(data);
     },
   });
 }
@@ -254,8 +246,7 @@ export function useGetSidebarPagesQuery(
     enabled: !!data?.pageId || !!data?.spaceId,
     queryFn: ({ pageParam }) => getSidebarPages({ ...data, cursor: pageParam }),
     initialPageParam: undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.meta?.nextCursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage.meta?.nextCursor ?? undefined,
   });
 }
 
@@ -266,8 +257,7 @@ export function useGetRootSidebarPagesQuery(data: SidebarPagesParams) {
       return getSidebarPages({ spaceId: data.spaceId, cursor: pageParam });
     },
     initialPageParam: undefined,
-    getNextPageParam: (lastPage) =>
-      lastPage.meta?.nextCursor ?? undefined,
+    getNextPageParam: (lastPage) => lastPage.meta?.nextCursor ?? undefined,
   });
 }
 

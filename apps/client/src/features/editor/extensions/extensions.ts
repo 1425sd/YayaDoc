@@ -47,7 +47,8 @@ import {
   SharedStorage,
   Columns,
   Column,
-  Status
+  Status,
+  FontSize,
 } from "@docmost/editor-ext";
 import {
   randomElement,
@@ -187,6 +188,7 @@ export const mainExtensions = [
   GlobalDragHandle,
   TextStyle,
   Color,
+  FontSize,
   SlashCommand,
   EmojiCommand,
   Comment.configure({

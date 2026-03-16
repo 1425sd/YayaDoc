@@ -50,6 +50,8 @@ export default function useAuth() {
       } else {
         navigate(getPostLoginRedirect());
       }
+
+      return { ok: true };
     } catch (err) {
       setIsLoading(false);
 
@@ -59,13 +61,13 @@ export default function useAuth() {
         navigate(
           `${APP_ROUTE.AUTH.VERIFY_EMAIL}?email=${encodeURIComponent(data.email)}${sig ? `&sig=${sig}` : ""}`,
         );
-        return;
+        return { ok: false, redirected: true };
       }
 
-      notifications.show({
-        message,
-        color: "red",
-      });
+      return {
+        ok: false,
+        error: message || t("Login failed"),
+      };
     }
   };
 

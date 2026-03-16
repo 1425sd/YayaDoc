@@ -4,7 +4,7 @@ export interface IPage {
   id: string;
   slugId: string;
   title: string;
-  content: string;
+  content: any;
   icon: string;
   coverPhoto: string;
   parentPageId: string;
@@ -27,6 +27,14 @@ export interface IPage {
     canEdit: boolean;
     hasRestriction: boolean;
   };
+}
+
+export type PageContentType = "note" | "board" | "mindmap";
+
+export enum PageContentFormat {
+  JSON = "json",
+  HTML = "html",
+  Markdown = "markdown",
 }
 
 interface ICreator {
@@ -72,12 +80,16 @@ export interface SidebarPagesParams {
 
 export interface IPageInput {
   pageId: string;
+  spaceId?: string;
   title: string;
   parentPageId: string;
   icon: string;
   coverPhoto: string;
   position: string;
   isLocked: boolean;
+  content?: any;
+  format?: PageContentFormat;
+  contentType?: PageContentType;
 }
 
 export interface IExportPageParams {

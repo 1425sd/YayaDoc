@@ -1,0 +1,262 @@
+.shell {
+  position: relative;
+  min-height: calc(100vh - 45px);
+  margin: -16px;
+  background:
+    radial-gradient(circle at top left, rgba(253, 224, 71, 0.16), transparent 22%),
+    radial-gradient(circle at top right, rgba(96, 165, 250, 0.18), transparent 22%),
+    linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
+}
+
+.topBar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.86);
+  backdrop-filter: blur(20px);
+}
+
+.topMeta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.backButton {
+  flex-shrink: 0;
+}
+
+.titleInput {
+  min-width: 220px;
+  max-width: 420px;
+}
+
+.status {
+  color: #64748b;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.canvasWrap {
+  position: relative;
+  min-height: calc(100vh - 180px);
+  overflow: visible;
+}
+
+.canvasSurface {
+  position: absolute;
+  inset: 0;
+  min-height: 100%;
+}
+
+.toolbar {
+  position: fixed;
+  top: 112px;
+  left: 24px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 72px;
+  padding: 14px 10px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 22px;
+  background: rgba(15, 23, 42, 0.78);
+  box-shadow: 0 20px 50px rgba(15, 23, 42, 0.22);
+  backdrop-filter: blur(18px);
+  user-select: none;
+}
+
+.toolButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 44px;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  cursor: pointer;
+  transition:
+    transform 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.toolButton:hover {
+  background: rgba(255, 255, 255, 0.12);
+  transform: translateY(-1px);
+}
+
+.toolButton:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.toolActive {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fde68a;
+}
+
+.toolbarDragging {
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+}
+
+.dragHandle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 30px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(241, 245, 249, 0.84);
+  cursor: grab;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  touch-action: none;
+}
+
+.dragHandle:active {
+  cursor: grabbing;
+}
+
+.toolbarDivider {
+  width: 100%;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.toolbarHint {
+  color: rgba(226, 232, 240, 0.74);
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.popoverPanel {
+  width: 260px;
+}
+
+.iconSearch {
+  margin-bottom: 12px;
+}
+
+.iconGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.iconCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 84px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  background: #fff;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.iconCard:hover {
+  border-color: rgba(59, 130, 246, 0.34);
+  background: #f8fbff;
+}
+
+.iconLabel {
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.shapeGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.shapeButton {
+  height: 62px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 14px;
+  background: #fff;
+  color: #0f172a;
+  cursor: pointer;
+}
+
+.shapeButton:hover {
+  border-color: rgba(251, 146, 60, 0.4);
+  background: #fff7ed;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px 16px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.footerNote {
+  max-width: 64ch;
+}
+
+@media (max-width: 900px) {
+  .shell {
+    margin: -16px -16px 0;
+  }
+
+  .topBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .topMeta {
+    flex-wrap: wrap;
+  }
+
+  .titleInput {
+    max-width: 100%;
+  }
+
+  .actions {
+    justify-content: space-between;
+  }
+
+  .toolbar {
+    width: 60px;
+    padding: 12px 8px;
+  }
+
+  .toolButton {
+    height: 40px;
+  }
+
+  .footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}

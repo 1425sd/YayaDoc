@@ -33,6 +33,7 @@ export interface ExcalidrawAttributes {
   aspectRatio?: number;
   align?: string;
   attachmentId?: string;
+  boardMode?: boolean;
 }
 
 declare module "@tiptap/core" {
@@ -129,6 +130,14 @@ export const Excalidraw = Node.create<ExcalidrawOptions>({
         parseHTML: (element) => element.getAttribute("data-attachment-id"),
         renderHTML: (attributes: ExcalidrawAttributes) => ({
           "data-attachment-id": attributes.attachmentId,
+        }),
+      },
+      boardMode: {
+        default: false,
+        parseHTML: (element) =>
+          element.getAttribute("data-board-mode") === "true",
+        renderHTML: (attributes: ExcalidrawAttributes) => ({
+          "data-board-mode": attributes.boardMode ? "true" : "false",
         }),
       },
     };

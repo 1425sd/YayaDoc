@@ -4,7 +4,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { CreatePageDto, ContentFormat } from '../dto/create-page.dto';
+import {
+  CreatePageDto,
+  ContentFormat,
+  PageContentType,
+} from '../dto/create-page.dto';
 import { ContentOperation, UpdatePageDto } from '../dto/update-page.dto';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
@@ -111,14 +115,21 @@ export class PageService {
     let ydoc = undefined;
 
     if (createPageDto?.content && createPageDto?.format) {
-      const prosemirrorJson = await this.parseProsemirrorContent(
-        createPageDto.content,
-        createPageDto.format,
-      );
+      if (
+        this.isMindMapContent(createPageDto.content, createPageDto.contentType)
+      ) {
+        content = createPageDto.content;
+        textContent = this.getMindMapTextContent(createPageDto.content);
+      } else {
+        const prosemirrorJson = await this.parseProsemirrorContent(
+          createPageDto.content,
+          createPageDto.format,
+        );
 
-      content = prosemirrorJson;
-      textContent = jsonToText(prosemirrorJson);
-      ydoc = createYdocFromJson(prosemirrorJson);
+        content = prosemirrorJson;
+        textContent = jsonToText(prosemirrorJson);
+        ydoc = createYdocFromJson(prosemirrorJson);
+      }
     }
 
     const page = await this.pageRepo.insertPage({
@@ -225,18 +236,29 @@ export class PageService {
         this.logger.warn(`Failed to queue add-page-watchers: ${err.message}`),
       );
 
-    if (
-      updatePageDto.content &&
-      updatePageDto.operation &&
-      updatePageDto.format
-    ) {
-      await this.updatePageContent(
-        page.id,
-        updatePageDto.content,
-        updatePageDto.operation,
-        updatePageDto.format,
-        user,
-      );
+    if (updatePageDto.content && updatePageDto.format) {
+      if (
+        this.isMindMapContent(updatePageDto.content, updatePageDto.contentType)
+      ) {
+        await this.pageRepo.updatePage(
+          {
+            content: updatePageDto.content as any,
+            textContent: this.getMindMapTextContent(updatePageDto.content),
+            ydoc: null,
+            lastUpdatedById: user.id,
+            contributorIds,
+          },
+          page.id,
+        );
+      } else if (updatePageDto.operation) {
+        await this.updatePageContent(
+          page.id,
+          updatePageDto.content,
+          updatePageDto.operation,
+          updatePageDto.format,
+          user,
+        );
+      }
     }
 
     return await this.pageRepo.findById(page.id, {
@@ -419,11 +441,7 @@ export class PageService {
 
       if (pageIdsToMove.length > 1) {
         // Update sub pages (all accessible pages except root)
-        await this.pageRepo.updatePages(
-          { spaceId },
-          childPageIds,
-          trx,
-        );
+        await this.pageRepo.updatePages({ spaceId }, childPageIds, trx);
       }
 
       if (pageIdsToMove.length > 0) {
@@ -456,9 +474,13 @@ export class PageService {
         );
 
         // Update watchers and remove those without access to new space
-        await this.watcherService.movePageWatchersToSpace(pageIdsToMove, spaceId, {
-          trx,
-        });
+        await this.watcherService.movePageWatchersToSpace(
+          pageIdsToMove,
+          spaceId,
+          {
+            trx,
+          },
+        );
 
         await this.aiQueue.add(QueueJob.PAGE_MOVED_TO_SPACE, {
           pageId: pageIdsToMove,
@@ -767,13 +789,15 @@ export class PageService {
       .selectFrom('page_ancestors')
       .selectAll('page_ancestors')
       .select((eb) =>
-        eb.exists(
-          eb
-            .selectFrom('pages as child')
-            .select(sql`1`.as('one'))
-            .whereRef('child.parentPageId', '=', 'page_ancestors.id')
-            .where('child.deletedAt', 'is', null),
-        ).as('hasChildren'),
+        eb
+          .exists(
+            eb
+              .selectFrom('pages as child')
+              .select(sql`1`.as('one'))
+              .whereRef('child.parentPageId', '=', 'page_ancestors.id')
+              .where('child.deletedAt', 'is', null),
+          )
+          .as('hasChildren'),
       )
       .execute();
 
@@ -936,6 +960,50 @@ export class PageService {
     }
 
     return prosemirrorJson;
+  }
+
+  private isMindMapContent(
+    content: string | object,
+    contentType?: PageContentType,
+  ): boolean {
+    if (contentType === 'mindmap') {
+      return true;
+    }
+
+    if (!content || typeof content !== 'object' || Array.isArray(content)) {
+      return false;
+    }
+
+    return Boolean(
+      content['type'] === 'mindmap' &&
+        content['data'] &&
+        typeof content['data'] === 'object' &&
+        content['data']['root'] &&
+        typeof content['data']['root'] === 'object',
+    );
+  }
+
+  private getMindMapTextContent(content: any): string {
+    const texts: string[] = [];
+
+    const walkNode = (node: any) => {
+      if (!node || typeof node !== 'object') {
+        return;
+      }
+
+      const text = node?.data?.text;
+      if (typeof text === 'string' && text.trim()) {
+        texts.push(text.trim());
+      }
+
+      if (Array.isArray(node.children)) {
+        node.children.forEach((child) => walkNode(child));
+      }
+    };
+
+    walkNode(content?.data?.root);
+
+    return texts.join(' ');
   }
 
   /**

@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom";
+import { Navigate, useParams } from "react-router-dom";
 import { usePageQuery } from "@/features/page/queries/page-query";
 import { FullEditor } from "@/features/editor/full-editor";
 import HistoryModal from "@/features/page-history/components/history-modal";
@@ -13,6 +13,9 @@ import { IconAlertTriangle, IconFileOff } from "@tabler/icons-react";
 import { Button } from "@mantine/core";
 import { Link } from "react-router-dom";
 import { ErrorBoundary } from "react-error-boundary";
+import { buildBoardUrl, buildMindMapUrl } from "@/features/page/page.utils.ts";
+import { isBoardPageContent } from "@/features/board/lib/board-content.ts";
+import { isMindMapPageContent } from "@/features/mindmap/lib/mindmap-content.ts";
 const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
 const MemoizedHistoryModal = React.memo(HistoryModal);
@@ -29,7 +32,12 @@ export default function Page() {
           icon={IconAlertTriangle}
           title={t("Failed to load page. An error occurred.")}
           action={
-            <Button variant="default" size="sm" mt="xs" onClick={resetErrorBoundary}>
+            <Button
+              variant="default"
+              size="sm"
+              mt="xs"
+              onClick={resetErrorBoundary}
+            >
               {t("Try again")}
             </Button>
           }
@@ -68,7 +76,13 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
             "This page may have been deleted, moved, or you may not have access.",
           )}
           action={
-            <Button component={Link} to="/home" variant="default" size="sm" mt="xs">
+            <Button
+              component={Link}
+              to="/home"
+              variant="default"
+              size="sm"
+              mt="xs"
+            >
               {t("Go to homepage")}
             </Button>
           }
@@ -76,15 +90,30 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
       );
     }
     return (
-      <EmptyState
-        icon={IconFileOff}
-        title={t("Error fetching page data.")}
-      />
+      <EmptyState icon={IconFileOff} title={t("Error fetching page data.")} />
     );
   }
 
   if (!space) {
     return <></>;
+  }
+
+  if (isBoardPageContent(page.content)) {
+    return (
+      <Navigate
+        replace
+        to={buildBoardUrl(page?.space?.slug, page.slugId, page.title)}
+      />
+    );
+  }
+
+  if (isMindMapPageContent(page.content)) {
+    return (
+      <Navigate
+        replace
+        to={buildMindMapUrl(page?.space?.slug, page.slugId, page.title)}
+      />
+    );
   }
 
   return (

@@ -36,6 +36,7 @@ import {
   Columns,
   Column,
   Status,
+  FontSize,
   addUniqueIdsToDoc,
   htmlToMarkdown,
 } from '@docmost/editor-ext';
@@ -74,6 +75,7 @@ export const tiptapExtensions = [
   TrailingNode,
   TextStyle,
   Color,
+  FontSize,
   MathInline,
   MathBlock,
   Details,

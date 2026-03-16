@@ -74,8 +74,11 @@ export default function GlobalAppShell({
   const isSpaceRoute = location.pathname.startsWith("/s/");
   const isHomeRoute = location.pathname.startsWith("/home");
   const isSpacesRoute = location.pathname === "/spaces";
+  const isBoardRoute = location.pathname.includes("/b/");
+  const isMindMapRoute = location.pathname.includes("/m/");
   const isPageRoute = location.pathname.includes("/p/");
-  const hideSidebar = isHomeRoute || isSpacesRoute;
+  const hideSidebar =
+    isHomeRoute || isSpacesRoute || isBoardRoute || isMindMapRoute;
 
   return (
     <AppShell
